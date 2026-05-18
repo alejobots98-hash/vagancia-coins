@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const {
     Client,
     GatewayIntentBits,
@@ -10,7 +12,7 @@ const {
     AttachmentBuilder
 } = require('discord.js');
 
-const { createClient } = require('@supabase/supabase-js');
+const mongoose = require('mongoose');
 
 const client = new Client({
     intents: [
@@ -26,11 +28,7 @@ const client = new Client({
 // =====================================
 
 const TOKEN = process.env.DISCORD_TOKEN;
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const MONGO_URI = process.env.MONGO_URI;
 
 // CANALES
 const CLAIM_CHANNEL_ID = 'PONER_CANAL_RECLAMOS';
@@ -51,10 +49,41 @@ const ROLES = {
 };
 
 // =====================================
+// MONGODB
+// =====================================
+
+mongoose.connect(MONGO_URI)
+
+.then(() => {
+    console.log('✅ MongoDB conectado');
+})
+
+.catch((err) => {
+    console.log(err);
+});
+
+// =====================================
+// SCHEMA
+// =====================================
+
+const userSchema = new mongoose.Schema({
+
+    userId: String,
+
+    coins: {
+        type: Number,
+        default: 0
+    }
+});
+
+const User = mongoose.model('vgcoins', userSchema);
+
+// =====================================
 // PREMIOS
 // =====================================
 
 const rewards = {
+
     collector: {
         coins: 3,
         name: 'ROL COLLECTOR',
@@ -95,32 +124,27 @@ const rewards = {
 // =====================================
 
 client.once('ready', () => {
+
     console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
 // =====================================
-// FUNCIONES SUPABASE
+// FUNCIONES
 // =====================================
 
 async function getUser(userId) {
 
-    const { data } = await supabase
-        .from('vgcoins')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-    return data;
+    return await User.findOne({
+        userId
+    });
 }
 
 async function createUser(userId) {
 
-    await supabase
-        .from('vgcoins')
-        .insert({
-            user_id: userId,
-            coins: 0
-        });
+    return await User.create({
+        userId,
+        coins: 0
+    });
 }
 
 async function addCoins(userId, amount) {
@@ -128,18 +152,14 @@ async function addCoins(userId, amount) {
     let user = await getUser(userId);
 
     if (!user) {
-        await createUser(userId);
-        user = await getUser(userId);
+        user = await createUser(userId);
     }
 
-    const newCoins = Number(user.coins) + amount;
+    user.coins += amount;
 
-    await supabase
-        .from('vgcoins')
-        .update({
-            coins: newCoins
-        })
-        .eq('user_id', userId);
+    await user.save();
+
+    return user;
 }
 
 async function removeCoins(userId, amount) {
@@ -148,16 +168,13 @@ async function removeCoins(userId, amount) {
 
     if (!user) return false;
 
-    const newCoins = Number(user.coins) - amount;
+    if (user.coins < amount) {
+        return false;
+    }
 
-    if (newCoins < 0) return false;
+    user.coins -= amount;
 
-    await supabase
-        .from('vgcoins')
-        .update({
-            coins: newCoins
-        })
-        .eq('user_id', userId);
+    await user.save();
 
     return true;
 }
@@ -171,7 +188,7 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     // =================================
-    // SUMAR WIN
+    // ADD WIN
     // =================================
 
     if (message.content.startsWith('!addwin')) {
@@ -186,17 +203,15 @@ client.on('messageCreate', async (message) => {
             return message.reply('❌ Menciona un usuario.');
         }
 
-        await addCoins(member.id, 0.15);
-
-        const user = await getUser(member.id);
+        const user = await addCoins(member.id, 0.15);
 
         message.reply(
-            `✅ ${member.username} ganó +0.15 VG COINS\n🪙 Total: ${Number(user.coins).toFixed(2)}`
+            `✅ ${member.username} ganó +0.15 VG COINS\n🪙 Total: ${user.coins.toFixed(2)}`
         );
     }
 
     // =================================
-    // VER COINS
+    // COINS
     // =================================
 
     if (message.content === '!coins') {
@@ -204,18 +219,19 @@ client.on('messageCreate', async (message) => {
         let user = await getUser(message.author.id);
 
         if (!user) {
-            await createUser(message.author.id);
-            user = await getUser(message.author.id);
+            user = await createUser(message.author.id);
         }
 
         const attachment = new AttachmentBuilder(COIN_LOGO);
 
         const embed = new EmbedBuilder()
+
             .setColor('#d4af37')
+
             .setThumbnail('attachment://vaganciacoin.png')
 
             .setAuthor({
-                name: `${message.author.username}`,
+                name: message.author.username,
                 iconURL: message.author.displayAvatarURL({ dynamic: true })
             })
 
@@ -224,7 +240,7 @@ client.on('messageCreate', async (message) => {
             .setDescription(`
 🪙 **TUS VG COINS**
 
-# ${Number(user.coins).toFixed(2)} 🪙
+# ${user.coins.toFixed(2)} 🪙
 
 ━━━━━━━━━━━━━━
 
@@ -247,10 +263,8 @@ client.on('messageCreate', async (message) => {
 
     if (message.content === '!topcoins') {
 
-        const { data } = await supabase
-            .from('vgcoins')
-            .select('*')
-            .order('coins', { ascending: false })
+        const data = await User.find()
+            .sort({ coins: -1 })
             .limit(10);
 
         const attachment = new AttachmentBuilder(COIN_LOGO);
@@ -264,26 +278,31 @@ client.on('messageCreate', async (message) => {
             let member;
 
             try {
-                member = await client.users.fetch(user.user_id);
+
+                member = await client.users.fetch(user.userId);
+
             } catch {
+
                 continue;
             }
 
             ranking += `
 **${i + 1}. ${member.username}**
-🪙 ${Number(user.coins).toFixed(2)} VG COINS
+🪙 ${user.coins.toFixed(2)} VG COINS
 
 `;
         }
 
         const embed = new EmbedBuilder()
+
             .setColor('#d4af37')
+
             .setThumbnail('attachment://vaganciacoin.png')
 
             .setTitle('🏆 TOP VG COINS')
 
             .setDescription(`
-Ranking de usuarios con más monedas.
+Ranking global de monedas.
 
 ━━━━━━━━━━━━━━
 
@@ -309,7 +328,9 @@ ${ranking}
         const attachment = new AttachmentBuilder(COIN_LOGO);
 
         const embed = new EmbedBuilder()
+
             .setColor('#d4af37')
+
             .setThumbnail('attachment://vaganciacoin.png')
 
             .setTitle('🏦 VAGANCIA COIN SHOP')
@@ -339,6 +360,7 @@ ROL RICHEST ONE
             `);
 
         const row = new ActionRowBuilder()
+
             .addComponents(
 
                 new ButtonBuilder()
@@ -363,6 +385,7 @@ ROL RICHEST ONE
             );
 
         const row2 = new ActionRowBuilder()
+
             .addComponents(
 
                 new ButtonBuilder()
@@ -399,13 +422,12 @@ client.on('interactionCreate', async (interaction) => {
     let user = await getUser(interaction.user.id);
 
     if (!user) {
-        await createUser(interaction.user.id);
-        user = await getUser(interaction.user.id);
+        user = await createUser(interaction.user.id);
     }
 
     const reward = rewards[rewardKey];
 
-    if (Number(user.coins) < reward.coins) {
+    if (user.coins < reward.coins) {
 
         return interaction.reply({
             content: '❌ No tienes suficientes VG COINS.',
