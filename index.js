@@ -13,6 +13,8 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const path = require('path');
 
 const client = new Client({
     intents: [
@@ -32,6 +34,8 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 
 const TICKET_CATEGORY_ID = '1505883981005193588'; 
 const STAFF_ROLE_ID = '1476541425263968391'; 
+
+const COIN_LOGO_PATH = path.join(__dirname, 'vaganciacoin.png'); 
 
 const ROLES = {
     collector: 'ROLE_ID_COLLECTOR',
@@ -82,6 +86,23 @@ async function removeCoins(userId, amount) {
     return true;
 }
 
+// FUNCIÓN AUXILIAR REFORZADA COMPATIBLE
+function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+}
+
 // =====================================
 // EVENTO: MENSAJES (COMANDOS)
 // =====================================
@@ -128,80 +149,181 @@ client.on('messageCreate', async (message) => {
     }
 
     // =================================
-    // COMANDO EMBED: !mycoins 🪙
+    // COMANDO GRAFICO: !mycoins 🎨
     // =================================
     if (message.content === '!mycoins') {
         try {
             let user = await getUser(message.author.id);
             if (!user) user = await createUser(message.author.id);
 
-            // Simulamos barra de progreso basada en el premio top (30 coins)
-            const maxCoins = 30;
-            const totalBloques = 15;
-            const porcentaje = Math.min(user.coins / maxCoins, 1);
-            const bloquesLlenos = Math.round(porcentaje * totalBloques);
-            const bloquesVacios = totalBloques - bloquesLlenos;
-            const barra = '🟩'.repeat(bloquesLlenos) + '⬛'.repeat(bloquesVacios);
+            const canvas = createCanvas(700, 250);
+            const ctx = canvas.getContext('2d');
 
-            const embed = new EmbedBuilder()
-                .setColor('#d4af37')
-                .setAuthor({ name: `BANCO CENTRAL • LA VAGANCIA`, iconURL: message.guild.iconURL() })
-                .setTitle('🪙 TU ESTADO DE CUENTA')
-                .setThumbnail(message.author.displayAvatarURL({ extension: 'png' }))
-                .setDescription(`
-> 👤 **Usuario:** ${message.author}
-> 🏦 **Saldo Disponible:** \`${user.coins.toFixed(2)} VG COINS\`
+            const grad = ctx.createLinearGradient(0, 0, 700, 250);
+            grad.addColorStop(0, '#111215');
+            grad.addColorStop(1, '#16171a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 700, 250);
 
-📊 **Progreso de Canje:**
-\`${barra}\` (\`${Math.round(porcentaje * 100)}%\`)
-*Meta simulada para el premio mayor (30 VG)*
-                `)
-                .setFooter({ text: 'Relájate, juega, gana. • La Vagancia' })
-                .setTimestamp();
+            ctx.fillStyle = '#d4af37';
+            ctx.fillRect(0, 0, 8, 250);
 
-            return message.reply({ embeds: [embed] });
+            try {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.clip();
+                
+                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
+                const avatarImg = await loadImage(avatarUrl);
+                ctx.drawImage(avatarImg, 50, 65, 120, 120);
+                ctx.restore();
+            } catch (avatarError) {
+                ctx.restore();
+                ctx.fillStyle = '#2a2b31';
+                ctx.beginPath();
+                ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+                ctx.fill();
+            }
+
+            ctx.strokeStyle = '#d4af37';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+            ctx.stroke();
+
+            // Usamos la fuente nativa "sans-serif" para evitar choques en Linux
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.fillText(message.author.username.toUpperCase(), 215, 95);
+
+            ctx.fillStyle = '#a0a2a6';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText('TUS VG COINS', 215, 62);
+
+            ctx.fillStyle = '#e5c158';
+            ctx.font = 'bold 44px sans-serif';
+            ctx.fillText(`${user.coins.toFixed(2)}`, 215, 155);
+
+            ctx.fillStyle = '#212226';
+            drawRoundRect(ctx, 215, 180, 415, 14, 7, true, false);
+
+            const porcentaje = Math.min(user.coins / 30, 1);
+            if (porcentaje > 0) {
+                ctx.fillStyle = '#d4af37';
+                drawRoundRect(ctx, 215, 180, 415 * porcentaje, 14, 7, true, false);
+            }
+
+            ctx.fillStyle = '#686a6e';
+            ctx.font = 'italic 13px sans-serif';
+            ctx.fillText('Relájate, juega, gana.', 215, 215);
+
+            try {
+                const coinImg = await loadImage(COIN_LOGO_PATH);
+                ctx.save();
+                ctx.globalAlpha = 0.85; 
+                ctx.drawImage(coinImg, 480, 35, 180, 180);
+                ctx.restore();
+            } catch (e) {}
+
+            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'profile-vagancia.png' });
+            return message.reply({ files: [attachment] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Error al procesar tu saldo.');
+            return message.reply('❌ Error gráfico al generar la tarjeta de perfil.');
         }
     }
 
     // =================================
-    // COMANDO EMBED: !topcoins 🏆
+    // COMANDO GRAFICO: !topcoins 🏆
     // =================================
     if (message.content === '!topcoins') {
         try {
-            const data = await User.find().sort({ coins: -1 }).limit(5);
+            const data = await User.find().sort({ coins: -1 }).limit(5); 
             if (data.length === 0) return message.reply('🪙 El ranking está vacío actualmente.');
 
-            let rankingTexto = '';
-            const medallas = ['🥇', '🥈', '🥉', '👑', '👑'];
+            const canvas = createCanvas(620, 500);
+            const ctx = canvas.getContext('2d');
 
+            ctx.fillStyle = '#111215';
+            ctx.fillRect(0, 0, 620, 500);
+
+            ctx.fillStyle = '#d4af37';
+            ctx.fillRect(0, 0, 620, 80);
+
+            ctx.fillStyle = '#111215';
+            ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('🏆 TOP COINS', 35, 46);
+
+            ctx.fillStyle = '#473401';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText('Ranking de los usuarios con más VG Coins', 35, 66);
+
+            let yOffset = 140;
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 let username = 'Usuario Desconocido';
+                let avatarBuffer = null;
 
                 try {
                     const fetchedUser = await client.users.fetch(row.userId);
                     username = fetchedUser.username;
-                } catch (e) {}
+                    try {
+                        const avatarUrl = fetchedUser.displayAvatarURL({ extension: 'png', size: 128 });
+                        avatarBuffer = await loadImage(avatarUrl);
+                    } catch (e) {}
+                } catch (userFetchError) {}
 
-                rankingTexto += `${medallas[i]} **#${i + 1}** | \`${username.toUpperCase()}\` ➔ **${row.coins.toFixed(2)} VG**\n\n`;
+                ctx.fillStyle = '#16171a';
+                drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
+
+                if (avatarBuffer) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(110, yOffset - 3, 20, 0, Math.PI * 2, true);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(avatarBuffer, 90, yOffset - 23, 40, 40);
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = '#212226';
+                    ctx.beginPath();
+                    ctx.arc(110, yOffset - 3, 20, 0, Math.PI * 2, true);
+                    ctx.fill();
+                }
+
+                if (i === 0) ctx.fillStyle = '#ffd700'; 
+                else if (i === 1) ctx.fillStyle = '#c0c0c0'; 
+                else if (i === 2) ctx.fillStyle = '#cd7f32'; 
+                else ctx.fillStyle = '#ffffff';
+
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText(`${i + 1}.`, 55, yOffset + 5);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(username.toUpperCase(), 150, yOffset + 3);
+
+                ctx.fillStyle = '#e5c158';
+                ctx.font = 'bold 20px sans-serif';
+                ctx.fillText(`${row.coins.toFixed(2)} VG`, 485, yOffset + 4);
+
+                yOffset += 70;
             }
 
-            const embed = new EmbedBuilder()
-                .setColor('#d4af37')
-                .setTitle('🏆 RANKING GENERAL DE VG COINS')
-                .setDescription(`Top 5 de los usuarios con más poder adquisitivo en **La Vagancia**.\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${rankingTexto}━━━━━━━━━━━━━━━━━━━━━━`)
-                .setFooter({ text: 'Sistema de Monitoreo Centralizado' })
-                .setTimestamp();
+            try {
+                const coinImg = await loadImage(COIN_LOGO_PATH);
+                ctx.drawImage(coinImg, 510, 405, 80, 80);
+            } catch (e) {}
 
-            return message.reply({ embeds: [embed] });
+            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'leaderboard-vagancia.png' });
+            return message.reply({ files: [attachment] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Error al procesar el Leaderboard.');
+            return message.reply('❌ Error gráfico al generar el Leaderboard.');
         }
     }
 
@@ -209,8 +331,10 @@ client.on('messageCreate', async (message) => {
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isNotificationStaff) return;
 
+        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
         const embed = new EmbedBuilder()
             .setColor('#00ff99')
+            .setThumbnail('attachment://vaganciacoin.png')
             .setTitle('🏦 LA VAGANCIA • COIN TIENDA')
             .setDescription(`
 ¡Bienvenido al mercado central de **La Vagancia**! Utiliza tus monedas acumuladas compitiendo en el servidor para canjearlas por los siguientes beneficios exclusivos.
@@ -244,7 +368,8 @@ client.on('messageCreate', async (message) => {
 
         return message.channel.send({
             embeds: [embed],
-            components: [row, row2]
+            components: [row, row2],
+            files: [file]
         });
     }
 });
@@ -328,6 +453,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const ticketEmbed = new EmbedBuilder()
             .setColor('#bb0000')
+            .setThumbnail('attachment://vaganciacoin.png')
             .setTitle('🎫 TICKET DE RECLAMO CENTRAL')
             .setDescription(`
 Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus monedas ya fueron descontadas. El Staff revisará este caso a la brevedad.
@@ -349,10 +475,13 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             new ButtonBuilder().setCustomId('close_ticket').setLabel('🔒 Cerrar Ticket').setStyle(ButtonStyle.Danger)
         );
 
+        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
+
         await ticketChannel.send({
             content: `📢 <@&${STAFF_ROLE_ID}> • ¡Nuevo reclamo abierto por ${interaction.user}!`,
             embeds: [ticketEmbed],
-            components: [closeRow]
+            components: [closeRow],
+            files: [file]
         });
 
         return interaction.editReply({
