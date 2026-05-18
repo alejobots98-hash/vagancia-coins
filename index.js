@@ -133,7 +133,7 @@ client.on('messageCreate', async (message) => {
         try {
             if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error de conexión:** MongoDB offline.');
             let user = await User.findOne({ userId: member.id });
-            if (!user) user = new User({ userId: member.id, coins: 0 });
+            if (!user) user = new NewUser({ userId: member.id, coins: 0 }); // Corregido por si no existe
 
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
             await user.save();
@@ -213,7 +213,7 @@ client.on('messageCreate', async (message) => {
             ctx.font = 'bold 42px sans-serif';
             ctx.fillText(`${user.coins.toFixed(2)}`, 200, 155);
 
-            // CORREGIDO: Se reemplazó ctx.roundRect por la función drawRoundRect compatible
+            // FUNCIÓN PROPIA COMPATIBLE: drawRoundRect en lugar de ctx.roundRect
             ctx.fillStyle = '#212226';
             drawRoundRect(ctx, 200, 180, 430, 14, 7, true, false);
 
@@ -286,6 +286,7 @@ client.on('messageCreate', async (message) => {
                     avatarBuffer = await loadImage(avatarUrl);
                 } catch {}
 
+                // CORREGIDO: Aquí también se reemplazó ctx.roundRect por drawRoundRect para evitar el fallo de Linux
                 ctx.fillStyle = '#16171a';
                 drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
 
