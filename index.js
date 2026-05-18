@@ -186,7 +186,7 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#d4af37';
             ctx.fillRect(0, 0, 8, 250);
 
-            // PROTECCIÓN TOTAL EN EL AVATAR: Si falla al cargar el avatar de Discord, dibuja un fondo gris estético
+            // PROTECCIÓN EN EL AVATAR: Evita fallas si Linux se traba leyendo formatos de Discord
             try {
                 ctx.save();
                 ctx.beginPath();
@@ -206,31 +206,30 @@ client.on('messageCreate', async (message) => {
                 ctx.fill();
                 
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 32px Arial';
+                ctx.font = 'bold 32px sans-serif'; // Usamos sans-serif estándar del sistema
                 ctx.textAlign = 'center';
                 ctx.fillText(message.author.username.charAt(0).toUpperCase(), 110, 136);
-                ctx.textAlign = 'start'; // Reseteamos alineación
-                console.log("⚠️ Saltado error de carga de avatar en !mycoins.");
+                ctx.textAlign = 'start';
             }
 
-            // Anillo dorado alrededor del avatar
+            // Anillo dorado
             ctx.strokeStyle = '#d4af37';
             ctx.lineWidth = 4;
             ctx.beginPath();
             ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
             ctx.stroke();
 
-            // Textos alineados
+            // TEXTOS BLINDADOS: Usamos sans-serif nativo para evitar colisiones de colecciones de fuentes
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 28px Arial';
+            ctx.font = 'bold 28px sans-serif';
             ctx.fillText(message.author.username.toUpperCase(), 215, 95);
 
             ctx.fillStyle = '#a0a2a6';
-            ctx.font = 'bold 13px Arial';
+            ctx.font = 'bold 13px sans-serif';
             ctx.fillText('TUS VG COINS', 215, 62);
 
             ctx.fillStyle = '#e5c158';
-            ctx.font = 'bold 44px Impact';
+            ctx.font = 'bold 44px sans-serif';
             ctx.fillText(`${user.coins.toFixed(2)}`, 215, 155);
 
             ctx.fillStyle = '#212226';
@@ -243,10 +242,9 @@ client.on('messageCreate', async (message) => {
             }
 
             ctx.fillStyle = '#686a6e';
-            ctx.font = 'italic 13px Arial';
+            ctx.font = 'italic 13px sans-serif';
             ctx.fillText('Relájate, juega, gana.', 215, 215);
 
-            // Marca de agua de la moneda segura
             try {
                 const coinImg = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
@@ -283,12 +281,13 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#d4af37';
             ctx.fillRect(0, 0, 620, 80);
 
+            // Títulos limpios nativos
             ctx.fillStyle = '#111215';
-            ctx.font = 'bold 26px Arial';
+            ctx.font = 'bold 26px sans-serif';
             ctx.fillText('🏆 TOP COINS', 35, 46);
 
             ctx.fillStyle = '#473401';
-            ctx.font = 'bold 13px Arial';
+            ctx.font = 'bold 13px sans-serif';
             ctx.fillText('Ranking de los usuarios con más VG Coins', 35, 66);
 
             let yOffset = 140;
@@ -301,19 +300,15 @@ client.on('messageCreate', async (message) => {
                     const fetchedUser = await client.users.fetch(row.userId);
                     username = fetchedUser.username;
                     
-                    // Intentamos cargar el avatar dentro de una jaula de seguridad individual
                     try {
                         const avatarUrl = fetchedUser.displayAvatarURL({ extension: 'png', size: 128 });
                         avatarBuffer = await loadImage(avatarUrl);
-                    } catch (e) {
-                        console.log(`⚠️ Falló avatar para ${username}, se usará marcador genérico.`);
-                    }
+                    } catch (e) {}
                 } catch (userFetchError) {}
 
                 ctx.fillStyle = '#16171a';
                 drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
 
-                // Si cargó el buffer lo estampa, sino dibuja un círculo estético con su inicial
                 if (avatarBuffer) {
                     ctx.save();
                     ctx.beginPath();
@@ -329,7 +324,7 @@ client.on('messageCreate', async (message) => {
                     ctx.fill();
 
                     ctx.fillStyle = '#d4af37';
-                    ctx.font = 'bold 14px Arial';
+                    ctx.font = 'bold 14px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.fillText(username.charAt(0).toUpperCase(), 110, yOffset + 2);
                     ctx.textAlign = 'start';
@@ -340,15 +335,15 @@ client.on('messageCreate', async (message) => {
                 else if (i === 2) ctx.fillStyle = '#cd7f32'; 
                 else ctx.fillStyle = '#ffffff';
 
-                ctx.font = 'bold 22px Impact';
+                ctx.font = 'bold 22px sans-serif';
                 ctx.fillText(`${i + 1}.`, 55, yOffset + 5);
                 
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 18px Arial';
+                ctx.font = 'bold 18px sans-serif';
                 ctx.fillText(username.toUpperCase(), 150, yOffset + 3);
 
                 ctx.fillStyle = '#e5c158';
-                ctx.font = 'bold 20px Impact';
+                ctx.font = 'bold 20px sans-serif';
                 ctx.fillText(`${row.coins.toFixed(2)} VG`, 485, yOffset + 4);
 
                 yOffset += 70;
