@@ -28,19 +28,20 @@ const client = new Client({
 // =====================================
 
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
-const MONGO_URI = process.env.MONGO_URI;
+// Lee MONGO_URI o MONGO_URL por si quedó configurado con L
+const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 
 // CANALES Y CATEGORÍAS
-const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; // Canal de logs (opcional)
-const TICKET_CATEGORY_ID = '1505883981005193588'; // Tu categoría de reclamos fija
+const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; 
+const TICKET_CATEGORY_ID = '1505883981005193588'; 
 
 // STAFF Y PERMISOS
-const STAFF_ROLE_ID = '1476541425263968391'; // Rol Staff autorizado para dar monedas y ver tickets
+const STAFF_ROLE_ID = '1476541425263968391'; 
 
 // LOGO MONEDA
 const COIN_LOGO = './vaganciacoin.png';
 
-// ROLES DE RECOMPENSA (Reemplazar por IDs reales de tu servidor)
+// ROLES DE RECOMPENSA
 const ROLES = {
     collector: 'ROLE_ID_COLLECTOR',
     elite: 'ROLE_ID_ELITE',
@@ -52,13 +53,17 @@ const ROLES = {
 // CONEXIÓN A MONGODB
 // =====================================
 
-mongoose.connect(MONGO_URI)
-.then(() => {
-    console.log('✅ MongoDB conectado correctamente');
-})
-.catch((err) => {
-    console.log('❌ Error en MongoDB:', err);
-});
+if (!MONGO_URI) {
+    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB en Railway.');
+} else {
+    mongoose.connect(MONGO_URI)
+    .then(() => {
+        console.log('✅ MongoDB conectado correctamente');
+    })
+    .catch((err) => {
+        console.log('❌ Error al conectar en MongoDB:', err.message);
+    });
+}
 
 // =====================================
 // BASE DE DATOS - SCHEMA
@@ -138,51 +143,61 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
+            if (mongoose.connection.readyState !== 1) {
+                return message.reply('❌ **Error de conexión:** El bot no está conectado a MongoDB. Revisá tus variables de Railway.');
+            }
+
             let user = await User.findOne({ userId: member.id });
             if (!user) {
                 user = new User({ userId: member.id, coins: 0 });
             }
 
-            // Suma de 0.15 controlando flotantes de JS
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
             await user.save();
 
             return message.reply(`✅ **Felicidades!** ${member} ganó **+0.15 VG COINS**\n🪙 **Total:** \`${user.coins.toFixed(2)} VG\``);
         } catch (error) {
             console.error("❌ Error en !wcoin:", error);
-            return message.reply('❌ Ocurrió un error interno en la base de datos al procesar las monedas.');
+            // Te dice el error exacto en el chat para saber qué pasa en tu Mongo
+            return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
         }
     }
 
     // =================================
-    // COMANDO: !mycoins (Diseño Fiel a la Captura)
+    // COMANDO: !mycoins (Clon Fiel de la Captura)
     // =================================
     if (message.content === '!mycoins') {
         try {
+            if (mongoose.connection.readyState !== 1) {
+                return message.reply('❌ **Error:** No hay conexión con la base de datos.');
+            }
+
             let user = await getUser(message.author.id);
             if (!user) {
                 user = await createUser(message.author.id);
             }
 
-            // El Thumbnail ahora toma dinámicamente el avatar del usuario que ejecuta el comando
+            const file = new AttachmentBuilder(COIN_LOGO);
             const embed = new EmbedBuilder()
                 .setColor('#d4af37')
-                .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 512 }))
-                .setTitle('🏦 BANCARIZACIÓN VAGANCIA')
+                .setThumbnail('attachment://vaganciacoin.png')
+                .setAuthor({
+                    name: message.author.username,
+                    iconURL: message.author.displayAvatarURL({ dynamic: true, size: 256 })
+                })
                 .setDescription(`
-👤 **CUENTA:** ${message.author}
+🪙 **TUS VG COINS**
 
-🪙 **TUS VG COINS:**
-➔ \`${user.coins.toFixed(2)} VG COINS\`
+# ${user.coins.toFixed(2)} 🪙
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎮 *Relájate, juega y canjeá tus victorias.*
-                `)
-                .setFooter({ text: 'Vagancia Coin System • Control de Perfil' });
+🎮 Relájate, juega, gana.
+                `);
 
-            return message.reply({ embeds: [embed] });
+            return message.reply({ embeds: [embed], files: [file] });
         } catch (error) {
             console.error("❌ Error en !mycoins:", error);
+            return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
         }
     }
 
@@ -191,6 +206,10 @@ client.on('messageCreate', async (message) => {
     // =================================
     if (message.content === '!topcoins') {
         try {
+            if (mongoose.connection.readyState !== 1) {
+                return message.reply('❌ **Error:** No hay conexión con la base de datos.');
+            }
+
             const data = await User.find().sort({ coins: -1 }).limit(10);
             const file = new AttachmentBuilder(COIN_LOGO);
             let ranking = '';
@@ -282,6 +301,10 @@ client.on('interactionCreate', async (interaction) => {
 
     await interaction.deferReply({ ephemeral: true });
 
+    if (mongoose.connection.readyState !== 1) {
+        return interaction.editReply({ content: '❌ El sistema de base de datos se encuentra offline en este momento.' });
+    }
+
     let user = await getUser(interaction.user.id);
     if (!user) {
         user = await createUser(interaction.user.id);
@@ -295,20 +318,17 @@ client.on('interactionCreate', async (interaction) => {
         });
     }
 
-    // Procesar el descuento
     await removeCoins(interaction.user.id, reward.coins);
 
-    // Auto-rol si está configurado el ID real
     if (reward.role && reward.role !== 'ROLE_ID_COLLECTOR' && reward.role !== 'ROLE_ID_ELITE' && reward.role !== 'ROLE_ID_MYTHICAL' && reward.role !== 'ROLE_ID_RICHEST') {
         try {
             const member = await interaction.guild.members.fetch(interaction.user.id);
             await member.roles.add(reward.role);
         } catch (e) {
-            console.log("⚠️ No se pudo asignar el rol automáticamente, se resolverá en el ticket.");
+            console.log("⚠️ No se pudo asignar el rol automáticamente.");
         }
     }
 
-    // Creación de ticket formateado estilo premium
     try {
         const ticketChannel = await interaction.guild.channels.create({
             name: `🎫-claim-${interaction.user.username}`,
@@ -367,15 +387,6 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             embeds: [ticketEmbed],
             files: [file]
         });
-
-        const logChannel = interaction.guild.channels.cache.get(CLAIM_CHANNEL_ID);
-        if (logChannel) {
-            logChannel.send({
-                content: `📝 **Log de Auditoría de Canjes:**`,
-                embeds: [ticketEmbed],
-                files: [file]
-            }).catch(() => {});
-        }
 
         return interaction.editReply({
             content: `✅ **Canje exitoso.** El premio se ha procesado.\n🎫 Tu ticket privado de entrega fue generado en: ${ticketChannel}`
