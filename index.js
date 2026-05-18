@@ -133,7 +133,9 @@ client.on('messageCreate', async (message) => {
         try {
             if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error de conexión:** MongoDB offline.');
             let user = await User.findOne({ userId: member.id });
-            if (!user) user = new NewUser({ userId: member.id, coins: 0 }); // Corregido por si no existe
+            if (!user) {
+                user = new User({ userId: member.id, coins: 0 }); // ¡Corregido el error de NewUser aquí!
+            }
 
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
             await user.save();
@@ -201,31 +203,31 @@ client.on('messageCreate', async (message) => {
             ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
             ctx.stroke();
 
+            // Alineación corregida con padding (215 en lugar de 200) y fuentes premium
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 28px sans-serif';
-            ctx.fillText(message.author.username.toUpperCase(), 200, 95);
+            ctx.font = 'bold 28px Arial';
+            ctx.fillText(message.author.username.toUpperCase(), 215, 95);
 
             ctx.fillStyle = '#a0a2a6';
-            ctx.font = '14px sans-serif';
-            ctx.fillText('TUS VG COINS', 200, 60);
+            ctx.font = 'bold 13px Arial';
+            ctx.fillText('TUS VG COINS', 215, 62);
 
             ctx.fillStyle = '#e5c158';
-            ctx.font = 'bold 42px sans-serif';
-            ctx.fillText(`${user.coins.toFixed(2)}`, 200, 155);
+            ctx.font = 'bold 44px Impact';
+            ctx.fillText(`${user.coins.toFixed(2)}`, 215, 155);
 
-            // FUNCIÓN PROPIA COMPATIBLE: drawRoundRect en lugar de ctx.roundRect
             ctx.fillStyle = '#212226';
-            drawRoundRect(ctx, 200, 180, 430, 14, 7, true, false);
+            drawRoundRect(ctx, 215, 180, 415, 14, 7, true, false);
 
             const porcentaje = Math.min(user.coins / 30, 1);
             if (porcentaje > 0) {
                 ctx.fillStyle = '#d4af37';
-                drawRoundRect(ctx, 200, 180, 430 * porcentaje, 14, 7, true, false);
+                drawRoundRect(ctx, 215, 180, 415 * porcentaje, 14, 7, true, false);
             }
 
             ctx.fillStyle = '#686a6e';
-            ctx.font = 'italic 13px sans-serif';
-            ctx.fillText('Relájate, juega, gana.', 200, 215);
+            ctx.font = 'italic 13px Arial';
+            ctx.fillText('Relájate, juega, gana.', 215, 215);
 
             try {
                 const coinImg = await loadImage(COIN_LOGO_PATH);
@@ -265,13 +267,14 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#d4af37';
             ctx.fillRect(0, 0, 620, 80);
 
+            // Títulos formateados con fuentes limpias
             ctx.fillStyle = '#111215';
-            ctx.font = 'bold 24px sans-serif';
-            ctx.fillText('🏆 TOP COINS', 35, 48);
+            ctx.font = 'bold 26px Arial';
+            ctx.fillText('🏆 TOP COINS', 35, 46);
 
-            ctx.fillStyle = '#332500';
-            ctx.font = '14px sans-serif';
-            ctx.fillText('Ranking de los usuarios con más VG Coins', 35, 68);
+            ctx.fillStyle = '#473401';
+            ctx.font = 'bold 13px Arial';
+            ctx.fillText('Ranking de los usuarios con más VG Coins', 35, 66);
 
             let yOffset = 140;
             for (let i = 0; i < data.length; i++) {
@@ -286,7 +289,6 @@ client.on('messageCreate', async (message) => {
                     avatarBuffer = await loadImage(avatarUrl);
                 } catch {}
 
-                // CORREGIDO: Aquí también se reemplazó ctx.roundRect por drawRoundRect para evitar el fallo de Linux
                 ctx.fillStyle = '#16171a';
                 drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
 
@@ -305,23 +307,23 @@ client.on('messageCreate', async (message) => {
                 else if (i === 2) ctx.fillStyle = '#cd7f32'; 
                 else ctx.fillStyle = '#ffffff';
 
-                ctx.font = 'bold 20px sans-serif';
-                ctx.fillText(`${i + 1}.`, 55, yOffset + 3);
+                ctx.font = 'bold 22px Impact';
+                ctx.fillText(`${i + 1}.`, 55, yOffset + 5);
                 
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 18px sans-serif';
-                ctx.fillText(username, 150, yOffset + 3);
+                ctx.font = 'bold 18px Arial';
+                ctx.fillText(username.toUpperCase(), 150, yOffset + 3);
 
                 ctx.fillStyle = '#e5c158';
-                ctx.font = 'bold 18px sans-serif';
-                ctx.fillText(`${row.coins.toFixed(2)} VG`, 490, yOffset + 3);
+                ctx.font = 'bold 20px Impact';
+                ctx.fillText(`${row.coins.toFixed(2)} VG`, 485, yOffset + 4);
 
                 yOffset += 70;
             }
 
             try {
                 const coinImg = await loadImage(COIN_LOGO_PATH);
-                ctx.drawImage(coinImg, 510, 400, 80, 80);
+                ctx.drawImage(coinImg, 510, 405, 80, 80);
             } catch (e) {}
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'leaderboard-vagancia.png' });
