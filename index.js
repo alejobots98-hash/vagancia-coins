@@ -134,7 +134,7 @@ client.on('messageCreate', async (message) => {
             if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error de conexión:** MongoDB offline.');
             let user = await User.findOne({ userId: member.id });
             if (!user) {
-                user = new User({ userId: member.id, coins: 0 }); // ¡Corregido el error de NewUser aquí!
+                user = new User({ userId: member.id, coins: 0 }); // ARREGLADO DEFINITIVO ACÁ
             }
 
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
@@ -203,7 +203,7 @@ client.on('messageCreate', async (message) => {
             ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
             ctx.stroke();
 
-            // Alineación corregida con padding (215 en lugar de 200) y fuentes premium
+            // Tipografías y márgenes premium estables
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 28px Arial';
             ctx.fillText(message.author.username.toUpperCase(), 215, 95);
@@ -267,7 +267,6 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#d4af37';
             ctx.fillRect(0, 0, 620, 80);
 
-            // Títulos formateados con fuentes limpias
             ctx.fillStyle = '#111215';
             ctx.font = 'bold 26px Arial';
             ctx.fillText('🏆 TOP COINS', 35, 46);
