@@ -134,7 +134,7 @@ client.on('messageCreate', async (message) => {
             if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error de conexión:** MongoDB offline.');
             let user = await User.findOne({ userId: member.id });
             if (!user) {
-                user = new User({ userId: member.id, coins: 0 }); // ARREGLADO DEFINITIVO ACÁ
+                user = new User({ userId: member.id, coins: 0 });
             }
 
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
@@ -186,24 +186,41 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#d4af37';
             ctx.fillRect(0, 0, 8, 250);
 
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
-            ctx.closePath();
-            ctx.clip();
-            
-            const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
-            const avatarImg = await loadImage(avatarUrl);
-            ctx.drawImage(avatarImg, 50, 65, 120, 120);
-            ctx.restore();
+            // PROTECCIÓN TOTAL EN EL AVATAR: Si falla al cargar el avatar de Discord, dibuja un fondo gris estético
+            try {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.clip();
+                
+                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
+                const avatarImg = await loadImage(avatarUrl);
+                ctx.drawImage(avatarImg, 50, 65, 120, 120);
+                ctx.restore();
+            } catch (avatarError) {
+                ctx.restore();
+                ctx.fillStyle = '#2a2b31';
+                ctx.beginPath();
+                ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+                ctx.fill();
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(message.author.username.charAt(0).toUpperCase(), 110, 136);
+                ctx.textAlign = 'start'; // Reseteamos alineación
+                console.log("⚠️ Saltado error de carga de avatar en !mycoins.");
+            }
 
+            // Anillo dorado alrededor del avatar
             ctx.strokeStyle = '#d4af37';
             ctx.lineWidth = 4;
             ctx.beginPath();
             ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
             ctx.stroke();
 
-            // Tipografías y márgenes premium estables
+            // Textos alineados
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 28px Arial';
             ctx.fillText(message.author.username.toUpperCase(), 215, 95);
@@ -229,22 +246,21 @@ client.on('messageCreate', async (message) => {
             ctx.font = 'italic 13px Arial';
             ctx.fillText('Relájate, juega, gana.', 215, 215);
 
+            // Marca de agua de la moneda segura
             try {
                 const coinImg = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
                 ctx.globalAlpha = 0.85; 
                 ctx.drawImage(coinImg, 480, 35, 180, 180);
                 ctx.restore();
-            } catch (e) {
-                console.log("⚠️ No se pudo cargar el archivo local vaganciacoin.png:", e.message);
-            }
+            } catch (e) {}
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'profile-vagancia.png' });
             return message.reply({ files: [attachment] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Error gráfico al generar la tarjeta de perfil.');
+            return message.reply('❌ Ocurrió un error general al procesar la tarjeta gráfica.');
         }
     }
 
@@ -279,18 +295,25 @@ client.on('messageCreate', async (message) => {
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 let username = 'Usuario Desconocido';
-                let avatarBuffer;
+                let avatarBuffer = null;
 
                 try {
                     const fetchedUser = await client.users.fetch(row.userId);
                     username = fetchedUser.username;
-                    const avatarUrl = fetchedUser.displayAvatarURL({ extension: 'png', size: 128 });
-                    avatarBuffer = await loadImage(avatarUrl);
-                } catch {}
+                    
+                    // Intentamos cargar el avatar dentro de una jaula de seguridad individual
+                    try {
+                        const avatarUrl = fetchedUser.displayAvatarURL({ extension: 'png', size: 128 });
+                        avatarBuffer = await loadImage(avatarUrl);
+                    } catch (e) {
+                        console.log(`⚠️ Falló avatar para ${username}, se usará marcador genérico.`);
+                    }
+                } catch (userFetchError) {}
 
                 ctx.fillStyle = '#16171a';
                 drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
 
+                // Si cargó el buffer lo estampa, sino dibuja un círculo estético con su inicial
                 if (avatarBuffer) {
                     ctx.save();
                     ctx.beginPath();
@@ -299,6 +322,17 @@ client.on('messageCreate', async (message) => {
                     ctx.clip();
                     ctx.drawImage(avatarBuffer, 90, yOffset - 23, 40, 40);
                     ctx.restore();
+                } else {
+                    ctx.fillStyle = '#212226';
+                    ctx.beginPath();
+                    ctx.arc(110, yOffset - 3, 20, 0, Math.PI * 2, true);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#d4af37';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(username.charAt(0).toUpperCase(), 110, yOffset + 2);
+                    ctx.textAlign = 'start';
                 }
 
                 if (i === 0) ctx.fillStyle = '#ffd700'; 
@@ -330,7 +364,7 @@ client.on('messageCreate', async (message) => {
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Error gráfico al generar el Leaderboard.');
+            return message.reply('❌ Ocurrió un error general al procesar el Leaderboard.');
         }
     }
 
