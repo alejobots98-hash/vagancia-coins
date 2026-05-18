@@ -13,8 +13,6 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
-const Jimp = require('jimp');
-const path = require('path');
 
 const client = new Client({
     intents: [
@@ -34,8 +32,6 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 
 const TICKET_CATEGORY_ID = '1505883981005193588'; 
 const STAFF_ROLE_ID = '1476541425263968391'; 
-
-const COIN_LOGO_PATH = path.join(__dirname, 'vaganciacoin.png'); 
 
 const ROLES = {
     collector: 'ROLE_ID_COLLECTOR',
@@ -132,83 +128,56 @@ client.on('messageCreate', async (message) => {
     }
 
     // =================================
-    // COMANDO ULTRA ESTABLE: !mycoins 🎨
+    // COMANDO EMBED: !mycoins 🪙
     // =================================
     if (message.content === '!mycoins') {
         try {
             let user = await getUser(message.author.id);
             if (!user) user = await createUser(message.author.id);
 
-            // Creamos un fondo negro puro de 700x250 de forma nativa
-            const image = new Jimp(700, 250, 0x111215FF);
-            
-            // Línea decorativa dorada a la izquierda
-            for (let x = 0; x < 8; x++) {
-                for (let y = 0; y < 250; y++) {
-                    image.setPixelColor(Jimp.rgbaToInt(212, 175, 55, 255), x, y);
-                }
-            }
+            // Simulamos barra de progreso basada en el premio top (30 coins)
+            const maxCoins = 30;
+            const totalBloques = 15;
+            const porcentaje = Math.min(user.coins / maxCoins, 1);
+            const bloquesLlenos = Math.round(porcentaje * totalBloques);
+            const bloquesVacios = totalBloques - bloquesLlenos;
+            const barra = '🟩'.repeat(bloquesLlenos) + '⬛'.repeat(bloquesVacios);
 
-            // Cargamos fuentes nativas bitmap de Jimp (Cero choques con Linux)
-            const fontWhite = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-            const fontGray = await Jimp.loadFont(Jimp.FONT_SANS_14_BLACK); // Auxiliar gris/oscuro
-            const fontYellow = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE); // Modificable por color si se requiere
+            const embed = new EmbedBuilder()
+                .setColor('#d4af37')
+                .setAuthor({ name: `BANCO CENTRAL • LA VAGANCIA`, iconURL: message.guild.iconURL() })
+                .setTitle('🪙 TU ESTADO DE CUENTA')
+                .setThumbnail(message.author.displayAvatarURL({ extension: 'png' }))
+                .setDescription(`
+> 👤 **Usuario:** ${message.author}
+> 🏦 **Saldo Disponible:** \`${user.coins.toFixed(2)} VG COINS\`
 
-            // Estampamos textos estables
-            image.print(fontWhite, 215, 50, "TUS VG COINS");
-            image.print(fontWhite, 215, 95, message.author.username.toUpperCase());
-            image.print(fontWhite, 215, 145, `SALDO: ${user.coins.toFixed(2)} VG`);
+📊 **Progreso de Canje:**
+\`${barra}\` (\`${Math.round(porcentaje * 100)}%\`)
+*Meta simulada para el premio mayor (30 VG)*
+                `)
+                .setFooter({ text: 'Relájate, juega, gana. • La Vagancia' })
+                .setTimestamp();
 
-            // Intentamos estampar el logo de la moneda si existe localmente
-            try {
-                const coinImg = await Jimp.read(COIN_LOGO_PATH);
-                coinImg.resize(150, 150);
-                image.composite(coinImg, 510, 50, {
-                    mode: Jimp.BLEND_SOURCE_OVER,
-                    opacitySource: 0.8
-                });
-            } catch (e) {}
-
-            // Intentamos meter el avatar de Discord de forma segura
-            try {
-                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 128 });
-                const avatarImg = await Jimp.read(avatarUrl);
-                avatarImg.resize(110, 110);
-                image.composite(avatarImg, 50, 70);
-            } catch (avErr) {}
-
-            const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
-            const attachment = new AttachmentBuilder(buffer, { name: 'profile-vagancia.png' });
-            return message.reply({ files: [attachment] });
+            return message.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Error de procesamiento estable en la tarjeta de perfil.');
+            return message.reply('❌ Error al procesar tu saldo.');
         }
     }
 
     // =================================
-    // COMANDO ULTRA ESTABLE: !topcoins 🏆
+    // COMANDO EMBED: !topcoins 🏆
     // =================================
     if (message.content === '!topcoins') {
         try {
             const data = await User.find().sort({ coins: -1 }).limit(5);
             if (data.length === 0) return message.reply('🪙 El ranking está vacío actualmente.');
 
-            const image = new Jimp(620, 500, 0x111215FF);
-            const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
-            const fontRows = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
+            let rankingTexto = '';
+            const medallas = ['🥇', '🥈', '🥉', '👑', '👑'];
 
-            // Pintar cabecera dorada estática
-            for (let x = 0; x < 620; x++) {
-                for (let y = 0; y < 80; y++) {
-                    image.setPixelColor(Jimp.rgbaToInt(212, 175, 55, 255), x, y);
-                }
-            }
-
-            image.print(fontTitle, 35, 25, "TOP COINS - LA VAGANCIA");
-
-            let yOffset = 120;
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 let username = 'Usuario Desconocido';
@@ -218,18 +187,21 @@ client.on('messageCreate', async (message) => {
                     username = fetchedUser.username;
                 } catch (e) {}
 
-                image.print(fontRows, 50, yOffset, `${i + 1}. ${username.toUpperCase()}`);
-                image.print(fontRows, 450, yOffset, `${row.coins.toFixed(2)} VG`);
-                yOffset += 65;
+                rankingTexto += `${medallas[i]} **#${i + 1}** | \`${username.toUpperCase()}\` ➔ **${row.coins.toFixed(2)} VG**\n\n`;
             }
 
-            const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
-            const attachment = new AttachmentBuilder(buffer, { name: 'leaderboard-vagancia.png' });
-            return message.reply({ files: [attachment] });
+            const embed = new EmbedBuilder()
+                .setColor('#d4af37')
+                .setTitle('🏆 RANKING GENERAL DE VG COINS')
+                .setDescription(`Top 5 de los usuarios con más poder adquisitivo en **La Vagancia**.\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n${rankingTexto}━━━━━━━━━━━━━━━━━━━━━━`)
+                .setFooter({ text: 'Sistema de Monitoreo Centralizado' })
+                .setTimestamp();
+
+            return message.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Error de procesamiento estable en el Leaderboard.');
+            return message.reply('❌ Error al procesar el Leaderboard.');
         }
     }
 
@@ -237,10 +209,8 @@ client.on('messageCreate', async (message) => {
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isNotificationStaff) return;
 
-        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
         const embed = new EmbedBuilder()
             .setColor('#00ff99')
-            .setThumbnail('attachment://vaganciacoin.png')
             .setTitle('🏦 LA VAGANCIA • COIN TIENDA')
             .setDescription(`
 ¡Bienvenido al mercado central de **La Vagancia**! Utiliza tus monedas acumuladas compitiendo en el servidor para canjearlas por los siguientes beneficios exclusivos.
@@ -274,8 +244,7 @@ client.on('messageCreate', async (message) => {
 
         return message.channel.send({
             embeds: [embed],
-            components: [row, row2],
-            files: [file]
+            components: [row, row2]
         });
     }
 });
@@ -359,7 +328,6 @@ client.on('interactionCreate', async (interaction) => {
 
         const ticketEmbed = new EmbedBuilder()
             .setColor('#bb0000')
-            .setThumbnail('attachment://vaganciacoin.png')
             .setTitle('🎫 TICKET DE RECLAMO CENTRAL')
             .setDescription(`
 Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus monedas ya fueron descontadas. El Staff revisará este caso a la brevedad.
@@ -381,13 +349,10 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             new ButtonBuilder().setCustomId('close_ticket').setLabel('🔒 Cerrar Ticket').setStyle(ButtonStyle.Danger)
         );
 
-        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
-
         await ticketChannel.send({
             content: `📢 <@&${STAFF_ROLE_ID}> • ¡Nuevo reclamo abierto por ${interaction.user}!`,
             embeds: [ticketEmbed],
-            components: [closeRow],
-            files: [file]
+            components: [closeRow]
         });
 
         return interaction.editReply({
