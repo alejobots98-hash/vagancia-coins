@@ -13,7 +13,7 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const Jimp = require('jimp');
 const path = require('path');
 
 const client = new Client({
@@ -35,7 +35,6 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 const TICKET_CATEGORY_ID = '1505883981005193588'; 
 const STAFF_ROLE_ID = '1476541425263968391'; 
 
-// RUTA ABSOLUTA SEGURA: Archivo local subido en tu GitHub
 const COIN_LOGO_PATH = path.join(__dirname, 'vaganciacoin.png'); 
 
 const ROLES = {
@@ -50,26 +49,18 @@ const ROLES = {
 // =====================================
 
 if (!MONGO_URI) {
-    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB en Railway.');
+    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB.');
 } else {
     mongoose.connect(MONGO_URI)
-    .then(() => {
-        console.log('✅ MongoDB conectado correctamente');
-    })
-    .catch((err) => {
-        console.log('❌ Error al conectar en MongoDB:', err.message);
-    });
+    .then(() => console.log('✅ MongoDB conectado correctamente'))
+    .catch((err) => console.log('❌ Error en MongoDB:', err.message));
 }
 
-// =====================================
-// BASE DE DATOS - SCHEMA
-// =====================================
-
+// Schema
 const userSchema = new mongoose.Schema({
     userId: String,
     coins: { type: Number, default: 0 }
 });
-
 const User = mongoose.model('vgcoins', userSchema);
 
 const rewards = {
@@ -95,23 +86,6 @@ async function removeCoins(userId, amount) {
     return true;
 }
 
-// FUNCIÓN AUXILIAR REFORZADA COMPATIBLE CON LINUX/RAILWAY
-function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-    if (fill) ctx.fill();
-    if (stroke) ctx.stroke();
-}
-
 // =====================================
 // EVENTO: MENSAJES (COMANDOS)
 // =====================================
@@ -122,20 +96,15 @@ client.on('messageCreate', async (message) => {
     const isNotificationStaff = message.member?.roles.cache.has(STAFF_ROLE_ID);
     const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
-    // =================================
-    // COMANDO: !wcoin
-    // =================================
+    // !wcoin
     if (message.content.trim().startsWith('!wcoin')) {
         if (!isAdmin && !isNotificationStaff) return;
         const member = message.mentions.users.first();
         if (!member) return message.reply('❌ **Uso correcto:** `!wcoin @usuario`');
 
         try {
-            if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error de conexión:** MongoDB offline.');
             let user = await User.findOne({ userId: member.id });
-            if (!user) {
-                user = new User({ userId: member.id, coins: 0 });
-            }
+            if (!user) user = new User({ userId: member.id, coins: 0 });
 
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
             await user.save();
@@ -145,9 +114,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // =================================
-    // COMANDO: !resetcoin
-    // =================================
+    // !resetcoin
     if (message.content.trim().startsWith('!resetcoin')) {
         if (!isAdmin && !isNotificationStaff) return;
         const member = message.mentions.users.first();
@@ -158,214 +125,115 @@ client.on('messageCreate', async (message) => {
             if (!user) user = new User({ userId: member.id, coins: 0 });
             user.coins = 0;
             await user.save();
-            return message.reply(`🔄 **Bancarización:** Monedas reseteadas para ${member}.\n🪙 **Saldo Actual:** \`0.00 VG\``);
+            return message.reply(`🔄 **Bancarización:** Monedas reseteadas.\n🪙 **Saldo Actual:** \`0.00 VG\``);
         } catch (error) {
             return message.reply(`❌ **Error:** \`${error.message}\``);
         }
     }
 
     // =================================
-    // COMANDO GRAFICO: !mycoins 🎨
+    // COMANDO ULTRA ESTABLE: !mycoins 🎨
     // =================================
     if (message.content === '!mycoins') {
         try {
-            if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error:** Sin conexión a la BD.');
-
             let user = await getUser(message.author.id);
             if (!user) user = await createUser(message.author.id);
 
-            const canvas = createCanvas(700, 250);
-            const ctx = canvas.getContext('2d');
-
-            const grad = ctx.createLinearGradient(0, 0, 700, 250);
-            grad.addColorStop(0, '#111215');
-            grad.addColorStop(1, '#16171a');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 700, 250);
-
-            ctx.fillStyle = '#d4af37';
-            ctx.fillRect(0, 0, 8, 250);
-
-            // PROTECCIÓN EN EL AVATAR: Evita fallas si Linux se traba leyendo formatos de Discord
-            try {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
-                ctx.closePath();
-                ctx.clip();
-                
-                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
-                const avatarImg = await loadImage(avatarUrl);
-                ctx.drawImage(avatarImg, 50, 65, 120, 120);
-                ctx.restore();
-            } catch (avatarError) {
-                ctx.restore();
-                ctx.fillStyle = '#2a2b31';
-                ctx.beginPath();
-                ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
-                ctx.fill();
-                
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 32px sans-serif'; // Usamos sans-serif estándar del sistema
-                ctx.textAlign = 'center';
-                ctx.fillText(message.author.username.charAt(0).toUpperCase(), 110, 136);
-                ctx.textAlign = 'start';
+            // Creamos un fondo negro puro de 700x250 de forma nativa
+            const image = new Jimp(700, 250, 0x111215FF);
+            
+            // Línea decorativa dorada a la izquierda
+            for (let x = 0; x < 8; x++) {
+                for (let y = 0; y < 250; y++) {
+                    image.setPixelColor(Jimp.rgbaToInt(212, 175, 55, 255), x, y);
+                }
             }
 
-            // Anillo dorado
-            ctx.strokeStyle = '#d4af37';
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
-            ctx.stroke();
+            // Cargamos fuentes nativas bitmap de Jimp (Cero choques con Linux)
+            const fontWhite = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+            const fontGray = await Jimp.loadFont(Jimp.FONT_SANS_14_BLACK); // Auxiliar gris/oscuro
+            const fontYellow = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE); // Modificable por color si se requiere
 
-            // TEXTOS BLINDADOS: Usamos sans-serif nativo para evitar colisiones de colecciones de fuentes
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 28px sans-serif';
-            ctx.fillText(message.author.username.toUpperCase(), 215, 95);
+            // Estampamos textos estables
+            image.print(fontWhite, 215, 50, "TUS VG COINS");
+            image.print(fontWhite, 215, 95, message.author.username.toUpperCase());
+            image.print(fontWhite, 215, 145, `SALDO: ${user.coins.toFixed(2)} VG`);
 
-            ctx.fillStyle = '#a0a2a6';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText('TUS VG COINS', 215, 62);
-
-            ctx.fillStyle = '#e5c158';
-            ctx.font = 'bold 44px sans-serif';
-            ctx.fillText(`${user.coins.toFixed(2)}`, 215, 155);
-
-            ctx.fillStyle = '#212226';
-            drawRoundRect(ctx, 215, 180, 415, 14, 7, true, false);
-
-            const porcentaje = Math.min(user.coins / 30, 1);
-            if (porcentaje > 0) {
-                ctx.fillStyle = '#d4af37';
-                drawRoundRect(ctx, 215, 180, 415 * porcentaje, 14, 7, true, false);
-            }
-
-            ctx.fillStyle = '#686a6e';
-            ctx.font = 'italic 13px sans-serif';
-            ctx.fillText('Relájate, juega, gana.', 215, 215);
-
+            // Intentamos estampar el logo de la moneda si existe localmente
             try {
-                const coinImg = await loadImage(COIN_LOGO_PATH);
-                ctx.save();
-                ctx.globalAlpha = 0.85; 
-                ctx.drawImage(coinImg, 480, 35, 180, 180);
-                ctx.restore();
+                const coinImg = await Jimp.read(COIN_LOGO_PATH);
+                coinImg.resize(150, 150);
+                image.composite(coinImg, 510, 50, {
+                    mode: Jimp.BLEND_SOURCE_OVER,
+                    opacitySource: 0.8
+                });
             } catch (e) {}
 
-            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'profile-vagancia.png' });
+            // Intentamos meter el avatar de Discord de forma segura
+            try {
+                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 128 });
+                const avatarImg = await Jimp.read(avatarUrl);
+                avatarImg.resize(110, 110);
+                image.composite(avatarImg, 50, 70);
+            } catch (avErr) {}
+
+            const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+            const attachment = new AttachmentBuilder(buffer, { name: 'profile-vagancia.png' });
             return message.reply({ files: [attachment] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Ocurrió un error general al procesar la tarjeta gráfica.');
+            return message.reply('❌ Error de procesamiento estable en la tarjeta de perfil.');
         }
     }
 
     // =================================
-    // COMANDO GRAFICO: !topcoins 🏆
+    // COMANDO ULTRA ESTABLE: !topcoins 🏆
     // =================================
     if (message.content === '!topcoins') {
         try {
-            if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error:** Sin conexión.');
-
-            const data = await User.find().sort({ coins: -1 }).limit(5); 
+            const data = await User.find().sort({ coins: -1 }).limit(5);
             if (data.length === 0) return message.reply('🪙 El ranking está vacío actualmente.');
 
-            const canvas = createCanvas(620, 500);
-            const ctx = canvas.getContext('2d');
+            const image = new Jimp(620, 500, 0x111215FF);
+            const fontTitle = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);
+            const fontRows = await Jimp.loadFont(Jimp.FONT_SANS_16_WHITE);
 
-            ctx.fillStyle = '#111215';
-            ctx.fillRect(0, 0, 620, 500);
+            // Pintar cabecera dorada estática
+            for (let x = 0; x < 620; x++) {
+                for (let y = 0; y < 80; y++) {
+                    image.setPixelColor(Jimp.rgbaToInt(212, 175, 55, 255), x, y);
+                }
+            }
 
-            ctx.fillStyle = '#d4af37';
-            ctx.fillRect(0, 0, 620, 80);
+            image.print(fontTitle, 35, 25, "TOP COINS - LA VAGANCIA");
 
-            // Títulos limpios nativos
-            ctx.fillStyle = '#111215';
-            ctx.font = 'bold 26px sans-serif';
-            ctx.fillText('🏆 TOP COINS', 35, 46);
-
-            ctx.fillStyle = '#473401';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText('Ranking de los usuarios con más VG Coins', 35, 66);
-
-            let yOffset = 140;
+            let yOffset = 120;
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 let username = 'Usuario Desconocido';
-                let avatarBuffer = null;
 
                 try {
                     const fetchedUser = await client.users.fetch(row.userId);
                     username = fetchedUser.username;
-                    
-                    try {
-                        const avatarUrl = fetchedUser.displayAvatarURL({ extension: 'png', size: 128 });
-                        avatarBuffer = await loadImage(avatarUrl);
-                    } catch (e) {}
-                } catch (userFetchError) {}
+                } catch (e) {}
 
-                ctx.fillStyle = '#16171a';
-                drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
-
-                if (avatarBuffer) {
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(110, yOffset - 3, 20, 0, Math.PI * 2, true);
-                    ctx.closePath();
-                    ctx.clip();
-                    ctx.drawImage(avatarBuffer, 90, yOffset - 23, 40, 40);
-                    ctx.restore();
-                } else {
-                    ctx.fillStyle = '#212226';
-                    ctx.beginPath();
-                    ctx.arc(110, yOffset - 3, 20, 0, Math.PI * 2, true);
-                    ctx.fill();
-
-                    ctx.fillStyle = '#d4af37';
-                    ctx.font = 'bold 14px sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(username.charAt(0).toUpperCase(), 110, yOffset + 2);
-                    ctx.textAlign = 'start';
-                }
-
-                if (i === 0) ctx.fillStyle = '#ffd700'; 
-                else if (i === 1) ctx.fillStyle = '#c0c0c0'; 
-                else if (i === 2) ctx.fillStyle = '#cd7f32'; 
-                else ctx.fillStyle = '#ffffff';
-
-                ctx.font = 'bold 22px sans-serif';
-                ctx.fillText(`${i + 1}.`, 55, yOffset + 5);
-                
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 18px sans-serif';
-                ctx.fillText(username.toUpperCase(), 150, yOffset + 3);
-
-                ctx.fillStyle = '#e5c158';
-                ctx.font = 'bold 20px sans-serif';
-                ctx.fillText(`${row.coins.toFixed(2)} VG`, 485, yOffset + 4);
-
-                yOffset += 70;
+                image.print(fontRows, 50, yOffset, `${i + 1}. ${username.toUpperCase()}`);
+                image.print(fontRows, 450, yOffset, `${row.coins.toFixed(2)} VG`);
+                yOffset += 65;
             }
 
-            try {
-                const coinImg = await loadImage(COIN_LOGO_PATH);
-                ctx.drawImage(coinImg, 510, 405, 80, 80);
-            } catch (e) {}
-
-            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'leaderboard-vagancia.png' });
+            const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+            const attachment = new AttachmentBuilder(buffer, { name: 'leaderboard-vagancia.png' });
             return message.reply({ files: [attachment] });
 
         } catch (error) {
             console.error(error);
-            return message.reply('❌ Ocurrió un error general al procesar el Leaderboard.');
+            return message.reply('❌ Error de procesamiento estable en el Leaderboard.');
         }
     }
 
-    // =================================
-    // COMANDO: !panelcoin
-    // =================================
+    // !panelcoin
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isNotificationStaff) return;
 

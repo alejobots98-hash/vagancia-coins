@@ -1,7 +1,7 @@
 {
-  "name": "vagancia-bot",
+  "name": "vagancia-coins",
   "version": "1.0.0",
-  "description": "",
+  "description": "Bot de economía para La Vagancia",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,10 +9,7 @@
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
-    "mongoose": "^8.2.1",
-    "@napi-rs/canvas": "^0.1.53"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "jimp": "^0.22.10",
+    "mongoose": "^8.2.1"
   }
 }
