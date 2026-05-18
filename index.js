@@ -14,7 +14,7 @@ const {
 
 const mongoose = require('mongoose');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
-const path = require('path'); // Módulo nativo para manejar rutas seguras
+const path = require('path');
 
 const client = new Client({
     intents: [
@@ -35,7 +35,7 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 const TICKET_CATEGORY_ID = '1505883981005193588'; 
 const STAFF_ROLE_ID = '1476541425263968391'; 
 
-// RUTA ABSOLUTA SEGURA: Apunta directo a tu archivo subido en GitHub
+// RUTA ABSOLUTA SEGURA: Archivo local subido en tu GitHub
 const COIN_LOGO_PATH = path.join(__dirname, 'vaganciacoin.png'); 
 
 const ROLES = {
@@ -50,7 +50,7 @@ const ROLES = {
 // =====================================
 
 if (!MONGO_URI) {
-    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB in Railway.');
+    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB en Railway.');
 } else {
     mongoose.connect(MONGO_URI)
     .then(() => {
@@ -95,6 +95,7 @@ async function removeCoins(userId, amount) {
     return true;
 }
 
+// FUNCIÓN AUXILIAR REFORZADA COMPATIBLE CON LINUX/RAILWAY
 function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
@@ -212,6 +213,7 @@ client.on('messageCreate', async (message) => {
             ctx.font = 'bold 42px sans-serif';
             ctx.fillText(`${user.coins.toFixed(2)}`, 200, 155);
 
+            // CORREGIDO: Se reemplazó ctx.roundRect por la función drawRoundRect compatible
             ctx.fillStyle = '#212226';
             drawRoundRect(ctx, 200, 180, 430, 14, 7, true, false);
 
@@ -225,7 +227,6 @@ client.on('messageCreate', async (message) => {
             ctx.font = 'italic 13px sans-serif';
             ctx.fillText('Relájate, juega, gana.', 200, 215);
 
-            // Carga segura desde la ruta absoluta del proyecto
             try {
                 const coinImg = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
@@ -337,7 +338,6 @@ client.on('messageCreate', async (message) => {
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isNotificationStaff) return;
 
-        // Mandamos la imagen local adjunta para el panel de la tienda
         const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
         const embed = new EmbedBuilder()
             .setColor('#00ff99')
