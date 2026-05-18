@@ -13,7 +13,8 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
-const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const path = require('path'); // Módulo nativo para manejar rutas seguras
 
 const client = new Client({
     intents: [
@@ -31,10 +32,11 @@ const client = new Client({
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 
-const CLAIM_CHANNEL_ID = '%CANAL_LOGS_OPCIONAL%'; 
 const TICKET_CATEGORY_ID = '1505883981005193588'; 
 const STAFF_ROLE_ID = '1476541425263968391'; 
-const COIN_LOGO = './vaganciacoin.png';
+
+// RUTA ABSOLUTA SEGURA: Apunta directo a tu archivo subido en GitHub
+const COIN_LOGO_PATH = path.join(__dirname, 'vaganciacoin.png'); 
 
 const ROLES = {
     collector: 'ROLE_ID_COLLECTOR',
@@ -48,7 +50,7 @@ const ROLES = {
 // =====================================
 
 if (!MONGO_URI) {
-    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB en Railway.');
+    console.log('❌ ERROR CRÍTICO: No se detectó ninguna variable de MongoDB in Railway.');
 } else {
     mongoose.connect(MONGO_URI)
     .then(() => {
@@ -91,6 +93,22 @@ async function removeCoins(userId, amount) {
     user.coins = parseFloat((user.coins - amount).toFixed(2));
     await user.save();
     return true;
+}
+
+function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
 }
 
 // =====================================
@@ -153,77 +171,70 @@ client.on('messageCreate', async (message) => {
             let user = await getUser(message.author.id);
             if (!user) user = await createUser(message.author.id);
 
-            // Crear lienzo (Ancho: 700px, Alto: 250px) - Estilo Banner Alargado
             const canvas = createCanvas(700, 250);
             const ctx = canvas.getContext('2d');
 
-            // 1. Fondo Oscuro Premium con Degradado
             const grad = ctx.createLinearGradient(0, 0, 700, 250);
             grad.addColorStop(0, '#111215');
-            grad.addColorStop(1, '#1a1b20');
+            grad.addColorStop(1, '#16171a');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, 700, 250);
 
-            // Borde estético dorado fino a la izquierda
             ctx.fillStyle = '#d4af37';
             ctx.fillRect(0, 0, 8, 250);
 
-            // 2. Dibujar Círculo del Avatar del usuario
             ctx.save();
             ctx.beginPath();
             ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
             ctx.closePath();
             ctx.clip();
+            
             const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
             const avatarImg = await loadImage(avatarUrl);
             ctx.drawImage(avatarImg, 50, 65, 120, 120);
             ctx.restore();
 
-            // Anillo dorado alrededor del avatar
             ctx.strokeStyle = '#d4af37';
             ctx.lineWidth = 4;
             ctx.beginPath();
             ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
             ctx.stroke();
 
-            // 3. Textos del Perfil
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 28px sans-serif';
             ctx.fillText(message.author.username.toUpperCase(), 200, 95);
 
             ctx.fillStyle = '#a0a2a6';
-            ctx.font = '16px sans-serif';
-            ctx.fillText('SISTEMA DE BANCARIZACIÓN CENTRAL', 200, 60);
+            ctx.font = '14px sans-serif';
+            ctx.fillText('TUS VG COINS', 200, 60);
 
-            // Balance
             ctx.fillStyle = '#e5c158';
-            ctx.font = 'bold 36px sans-serif';
-            ctx.fillText(`${user.coins.toFixed(2)} VG COINS`, 200, 150);
+            ctx.font = 'bold 42px sans-serif';
+            ctx.fillText(`${user.coins.toFixed(2)}`, 200, 155);
 
-            // 4. Barra de Progreso Decorativa Estilo Nivel (Ficticia hacia el próximo Rol importante)
-            ctx.fillStyle = '#2a2b31';
-            ctx.roundRect(200, 175, 400, 14, 7);
-            ctx.fill();
+            ctx.fillStyle = '#212226';
+            drawRoundRect(ctx, 200, 180, 430, 14, 7, true, false);
 
-            // Relleno de barra dinámico según monedas (máximo simulado de 30 para el premio mayor)
             const porcentaje = Math.min(user.coins / 30, 1);
-            ctx.fillStyle = '#d4af37';
             if (porcentaje > 0) {
-                ctx.roundRect(200, 175, 400 * porcentaje, 14, 7);
-                ctx.fill();
+                ctx.fillStyle = '#d4af37';
+                drawRoundRect(ctx, 200, 180, 430 * porcentaje, 14, 7, true, false);
             }
 
-            ctx.fillStyle = '#72767d';
-            ctx.font = '12px sans-serif';
-            ctx.fillText(`Progreso Tienda Central: ${Math.floor(porcentaje * 100)}%`, 200, 205);
+            ctx.fillStyle = '#686a6e';
+            ctx.font = 'italic 13px sans-serif';
+            ctx.fillText('Relájate, juega, gana.', 200, 215);
 
-            // 5. Estampar Logo Moneda si existe de fondo sutil a la derecha
+            // Carga segura desde la ruta absoluta del proyecto
             try {
-                const coinImg = await loadImage(COIN_LOGO);
-                ctx.globalAlpha = 0.15; // Super transparente de fondo
-                ctx.drawImage(coinImg, 520, 45, 150, 150);
-                ctx.globalAlpha = 1.0;
-            } catch (e) {}
+                const coinImg = await loadImage(COIN_LOGO_PATH);
+                ctx.save();
+                ctx.globalAlpha = 0.85; 
+                ctx.drawImage(coinImg, 480, 35, 180, 180);
+                ctx.restore();
+            } catch (e) {
+                console.log("⚠️ No se pudo cargar el archivo local vaganciacoin.png:", e.message);
+            }
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'profile-vagancia.png' });
             return message.reply({ files: [attachment] });
@@ -241,59 +252,75 @@ client.on('messageCreate', async (message) => {
         try {
             if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error:** Sin conexión.');
 
-            const data = await User.find().sort({ coins: -1 }).limit(5); // Top 5 para formato tarjeta limpia
+            const data = await User.find().sort({ coins: -1 }).limit(5); 
             if (data.length === 0) return message.reply('🪙 El ranking está vacío actualmente.');
 
-            const canvas = createCanvas(600, 450);
+            const canvas = createCanvas(620, 500);
             const ctx = canvas.getContext('2d');
 
-            // Fondo Tarjeta
             ctx.fillStyle = '#111215';
-            ctx.fillRect(0, 0, 600, 450);
+            ctx.fillRect(0, 0, 620, 500);
 
-            // Encabezado Dorado
             ctx.fillStyle = '#d4af37';
-            ctx.fillRect(0, 0, 600, 70);
+            ctx.fillRect(0, 0, 620, 80);
 
             ctx.fillStyle = '#111215';
-            ctx.font = 'bold 26px sans-serif';
-            ctx.fillText('🏆 RANKING GLOBAL • VG COINS', 30, 45);
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText('🏆 TOP COINS', 35, 48);
 
-            // Renderizar cada puesto
-            let yOffset = 120;
+            ctx.fillStyle = '#332500';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('Ranking de los usuarios con más VG Coins', 35, 68);
+
+            let yOffset = 140;
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 let username = 'Usuario Desconocido';
+                let avatarBuffer;
+
                 try {
                     const fetchedUser = await client.users.fetch(row.userId);
                     username = fetchedUser.username;
+                    const avatarUrl = fetchedUser.displayAvatarURL({ extension: 'png', size: 128 });
+                    avatarBuffer = await loadImage(avatarUrl);
                 } catch {}
 
-                // Contenedor de fila individual estilo premium
-                ctx.fillStyle = '#1a1b20';
-                ctx.roundRect(25, yOffset - 30, 550, 55, 6);
-                ctx.fill();
+                ctx.fillStyle = '#16171a';
+                drawRoundRect(ctx, 30, yOffset - 32, 560, 58, 8, true, false);
 
-                // Color según el podio
-                if (i === 0) ctx.fillStyle = '#ffd700'; // Oro
-                else if (i === 1) ctx.fillStyle = '#c0c0c0'; // Plata
-                else if (i === 2) ctx.fillStyle = '#cd7f32'; // Bronce
+                if (avatarBuffer) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(110, yOffset - 3, 20, 0, Math.PI * 2, true);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(avatarBuffer, 90, yOffset - 23, 40, 40);
+                    ctx.restore();
+                }
+
+                if (i === 0) ctx.fillStyle = '#ffd700'; 
+                else if (i === 1) ctx.fillStyle = '#c0c0c0'; 
+                else if (i === 2) ctx.fillStyle = '#cd7f32'; 
                 else ctx.fillStyle = '#ffffff';
 
-                // Posición e información
                 ctx.font = 'bold 20px sans-serif';
-                ctx.fillText(`#${i + 1}`, 45, yOffset);
+                ctx.fillText(`${i + 1}.`, 55, yOffset + 3);
                 
                 ctx.fillStyle = '#ffffff';
-                ctx.font = '18px sans-serif';
-                ctx.fillText(username.toUpperCase(), 100, yOffset);
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(username, 150, yOffset + 3);
 
                 ctx.fillStyle = '#e5c158';
                 ctx.font = 'bold 18px sans-serif';
-                ctx.fillText(`${row.coins.toFixed(2)} VG`, 470, yOffset);
+                ctx.fillText(`${row.coins.toFixed(2)} VG`, 490, yOffset + 3);
 
-                yOffset += 65;
+                yOffset += 70;
             }
+
+            try {
+                const coinImg = await loadImage(COIN_LOGO_PATH);
+                ctx.drawImage(coinImg, 510, 400, 80, 80);
+            } catch (e) {}
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'leaderboard-vagancia.png' });
             return message.reply({ files: [attachment] });
@@ -310,7 +337,8 @@ client.on('messageCreate', async (message) => {
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isNotificationStaff) return;
 
-        const file = new AttachmentBuilder(COIN_LOGO);
+        // Mandamos la imagen local adjunta para el panel de la tienda
+        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
         const embed = new EmbedBuilder()
             .setColor('#00ff99')
             .setThumbnail('attachment://vaganciacoin.png')
@@ -454,7 +482,7 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             new ButtonBuilder().setCustomId('close_ticket').setLabel('🔒 Cerrar Ticket').setStyle(ButtonStyle.Danger)
         );
 
-        const file = new AttachmentBuilder(COIN_LOGO);
+        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
 
         await ticketChannel.send({
             content: `📢 <@&${STAFF_ROLE_ID}> • ¡Nuevo reclamo abierto por ${interaction.user}!`,
