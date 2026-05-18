@@ -28,15 +28,14 @@ const client = new Client({
 // =====================================
 
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
-// Lee MONGO_URI o MONGO_URL por si quedó configurado con L
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 
 // CANALES Y CATEGORÍAS
-const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; 
-const TICKET_CATEGORY_ID = '1505883981005193588'; 
+const CLAIM_CHANNEL_ID = '%CANAL_LOGS_OPCIONAL%'; 
+const TICKET_CATEGORY_ID = '1505883981005193588'; // Tu categoría fija de reclamos
 
 // STAFF Y PERMISOS
-const STAFF_ROLE_ID = '1476541425263968391'; 
+const STAFF_ROLE_ID = '1476541425263968391'; // Tu rol Staff autorizado
 
 // LOGO MONEDA
 const COIN_LOGO = './vaganciacoin.png';
@@ -127,24 +126,23 @@ async function removeCoins(userId, amount) {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    const isNotificationStaff = message.member.roles.cache.has(STAFF_ROLE_ID);
+    const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
     // =================================
     // COMANDO: !wcoin (Suma siempre 0.15)
     // =================================
     if (message.content.trim().startsWith('!wcoin')) {
-        const isNotificationStaff = message.member.roles.cache.has(STAFF_ROLE_ID);
-        const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
-
         if (!isAdmin && !isNotificationStaff) return;
 
         const member = message.mentions.users.first();
-
         if (!member) {
-            return message.reply('❌ **Uso correcto:** `!wcoin @usuario` (Asegurate de mencionar a alguien).');
+            return message.reply('❌ **Uso correcto:** `!wcoin @usuario`');
         }
 
         try {
             if (mongoose.connection.readyState !== 1) {
-                return message.reply('❌ **Error de conexión:** El bot no está conectado a MongoDB. Revisá tus variables de Railway.');
+                return message.reply('❌ **Error de conexión:** El bot no está conectado a MongoDB.');
             }
 
             let user = await User.findOne({ userId: member.id });
@@ -157,14 +155,44 @@ client.on('messageCreate', async (message) => {
 
             return message.reply(`✅ **Felicidades!** ${member} ganó **+0.15 VG COINS**\n🪙 **Total:** \`${user.coins.toFixed(2)} VG\``);
         } catch (error) {
-            console.error("❌ Error en !wcoin:", error);
-            // Te dice el error exacto en el chat para saber qué pasa en tu Mongo
+            console.error(error);
             return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
         }
     }
 
     // =================================
-    // COMANDO: !mycoins (Clon Fiel de la Captura)
+    // COMANDO: !resetcoin @usuario (Resetea a 0)
+    // =================================
+    if (message.content.trim().startsWith('!resetcoin')) {
+        if (!isAdmin && !isNotificationStaff) return;
+
+        const member = message.mentions.users.first();
+        if (!member) {
+            return message.reply('❌ **Uso correcto:** `!resetcoin @usuario`');
+        }
+
+        try {
+            if (mongoose.connection.readyState !== 1) {
+                return message.reply('❌ **Error de conexión:** El bot no está conectado a MongoDB.');
+            }
+
+            let user = await User.findOne({ userId: member.id });
+            if (!user) {
+                user = new User({ userId: member.id, coins: 0 });
+            }
+
+            user.coins = 0;
+            await user.save();
+
+            return message.reply(`🔄 **Bancarización:** Se han reseteado las monedas de ${member}.\n🪙 **Saldo Actual:** \`0.00 VG\``);
+        } catch (error) {
+            console.error(error);
+            return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
+        }
+    }
+
+    // =================================
+    // COMANDO: !mycoins
     // =================================
     if (message.content === '!mycoins') {
         try {
@@ -196,8 +224,7 @@ client.on('messageCreate', async (message) => {
 
             return message.reply({ embeds: [embed], files: [file] });
         } catch (error) {
-            console.error("❌ Error en !mycoins:", error);
-            return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
+            console.error(error);
         }
     }
 
@@ -234,7 +261,7 @@ client.on('messageCreate', async (message) => {
 
             return message.reply({ embeds: [embed], files: [file] });
         } catch (error) {
-            console.error("❌ Error en !topcoins:", error);
+            console.error(error);
         }
     }
 
@@ -242,8 +269,6 @@ client.on('messageCreate', async (message) => {
     // COMANDO: !panelcoin
     // =================================
     if (message.content === '!panelcoin') {
-        const isNotificationStaff = message.member.roles.cache.has(STAFF_ROLE_ID);
-        const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
         if (!isAdmin && !isNotificationStaff) return;
 
         const file = new AttachmentBuilder(COIN_LOGO);
@@ -261,7 +286,7 @@ client.on('messageCreate', async (message) => {
 🏆 \`10 VG COINS\` ➔ **ROL MYTHICAL COLLECTOR**
 👑 \`15 VG COINS\` ➔ **ROL RICHEST ONE**
 💎 \`20 VG COINS\` ➔ **1 DECO DE 4.99 USD**
-💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO NARANJA X / MERCADO PAGO**
+💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 👇 Presioná el botón correspondiente abajo para iniciar el reclamo.
@@ -290,12 +315,30 @@ client.on('messageCreate', async (message) => {
 });
 
 // =====================================
-// EVENTO: INTERACCIONES (BOTONES DE TIENDA)
+// EVENTO: INTERACCIONES (BOTONES)
 // =====================================
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
+    // LÓGICA PARA BOTÓN DE CERRAR TICKET
+    if (interaction.customId === 'close_ticket') {
+        const isStaff = interaction.member.roles.cache.has(STAFF_ROLE_ID);
+        const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
+
+        if (!isAdmin && !isStaff) {
+            return interaction.reply({ content: '❌ Solo el Staff de la organización puede cerrar este ticket.', ephemeral: true });
+        }
+
+        await interaction.reply('🔒 **Cerrando el ticket...** Este canal se eliminará en 5 segundos.');
+        
+        setTimeout(() => {
+            interaction.channel.delete().catch(() => {});
+        }, 5000);
+        return;
+    }
+
+    // LÓGICA DE CANJES DE LA TIENDA
     const rewardKey = interaction.customId.replace('claim_', '');
     if (!rewards[rewardKey]) return;
 
@@ -380,13 +423,31 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             `)
             .setFooter({ text: 'Sistema de Reclamación Centralizado • La Vagancia' });
 
+        // Fila que contiene el botón de cierre exclusivo
+        const closeRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('close_ticket')
+                .setLabel('🔒 Cerrar Ticket')
+                .setStyle(ButtonStyle.Danger)
+        );
+
         const file = new AttachmentBuilder(COIN_LOGO);
 
         await ticketChannel.send({
             content: `📢 <@&${STAFF_ROLE_ID}> • ¡Nuevo reclamo abierto por ${interaction.user}!`,
             embeds: [ticketEmbed],
+            components: [closeRow],
             files: [file]
         });
+
+        const logChannel = interaction.guild.channels.cache.get(CLAIM_CHANNEL_ID);
+        if (logChannel) {
+            logChannel.send({
+                content: `📝 **Log de Auditoría de Canjes:**`,
+                embeds: [ticketEmbed],
+                files: [file]
+            }).catch(() => {});
+        }
 
         return interaction.editReply({
             content: `✅ **Canje exitoso.** El premio se ha procesado.\n🎫 Tu ticket privado de entrega fue generado en: ${ticketChannel}`
