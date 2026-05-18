@@ -13,6 +13,7 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 
 const client = new Client({
     intents: [
@@ -30,17 +31,11 @@ const client = new Client({
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGO_URL;
 
-// CANALES Y CATEGORÍAS
 const CLAIM_CHANNEL_ID = '%CANAL_LOGS_OPCIONAL%'; 
-const TICKET_CATEGORY_ID = '1505883981005193588'; // Tu categoría fija de reclamos
-
-// STAFF Y PERMISOS
-const STAFF_ROLE_ID = '1476541425263968391'; // Tu rol Staff autorizado
-
-// LOGO MONEDA
+const TICKET_CATEGORY_ID = '1505883981005193588'; 
+const STAFF_ROLE_ID = '1476541425263968391'; 
 const COIN_LOGO = './vaganciacoin.png';
 
-// ROLES DE RECOMPENSA
 const ROLES = {
     collector: 'ROLE_ID_COLLECTOR',
     elite: 'ROLE_ID_ELITE',
@@ -70,17 +65,10 @@ if (!MONGO_URI) {
 
 const userSchema = new mongoose.Schema({
     userId: String,
-    coins: {
-        type: Number,
-        default: 0
-    }
+    coins: { type: Number, default: 0 }
 });
 
 const User = mongoose.model('vgcoins', userSchema);
-
-// =====================================
-// DICCIONARIO DE PREMIOS
-// =====================================
 
 const rewards = {
     collector: { coins: 3, name: 'ROL COLLECTOR', role: ROLES.collector },
@@ -91,26 +79,12 @@ const rewards = {
     saldo: { coins: 30, name: '10.000 ARS DE SALDO' }
 };
 
-// =====================================
-// EVENTO: BOT ONLINE
-// =====================================
-
 client.once('ready', () => {
     console.log(`✅ Bot online como ${client.user.tag}`);
 });
 
-// =====================================
-// FUNCIONES INTERNAS (BASE DE DATOS)
-// =====================================
-
-async function getUser(userId) {
-    return await User.findOne({ userId });
-}
-
-async function createUser(userId) {
-    return await User.create({ userId, coins: 0 });
-}
-
+async function getUser(userId) { return await User.findOne({ userId }); }
+async function createUser(userId) { return await User.create({ userId, coins: 0 }); }
 async function removeCoins(userId, amount) {
     const user = await getUser(userId);
     if (!user || user.coins < amount) return false;
@@ -120,148 +94,213 @@ async function removeCoins(userId, amount) {
 }
 
 // =====================================
-// EVENTO: MENSAJES (COMANDOS DE TEXTO)
+// EVENTO: MENSAJES (COMANDOS)
 // =====================================
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    const isNotificationStaff = message.member.roles.cache.has(STAFF_ROLE_ID);
-    const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
+    const isNotificationStaff = message.member?.roles.cache.has(STAFF_ROLE_ID);
+    const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
     // =================================
-    // COMANDO: !wcoin (Suma siempre 0.15)
+    // COMANDO: !wcoin
     // =================================
     if (message.content.trim().startsWith('!wcoin')) {
         if (!isAdmin && !isNotificationStaff) return;
-
         const member = message.mentions.users.first();
-        if (!member) {
-            return message.reply('❌ **Uso correcto:** `!wcoin @usuario`');
-        }
+        if (!member) return message.reply('❌ **Uso correcto:** `!wcoin @usuario`');
 
         try {
-            if (mongoose.connection.readyState !== 1) {
-                return message.reply('❌ **Error de conexión:** El bot no está conectado a MongoDB.');
-            }
-
+            if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error de conexión:** MongoDB offline.');
             let user = await User.findOne({ userId: member.id });
-            if (!user) {
-                user = new User({ userId: member.id, coins: 0 });
-            }
+            if (!user) user = new User({ userId: member.id, coins: 0 });
 
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
             await user.save();
-
             return message.reply(`✅ **Felicidades!** ${member} ganó **+0.15 VG COINS**\n🪙 **Total:** \`${user.coins.toFixed(2)} VG\``);
         } catch (error) {
-            console.error(error);
-            return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
+            return message.reply(`❌ **Error:** \`${error.message}\``);
         }
     }
 
     // =================================
-    // COMANDO: !resetcoin @usuario (Resetea a 0)
+    // COMANDO: !resetcoin
     // =================================
     if (message.content.trim().startsWith('!resetcoin')) {
         if (!isAdmin && !isNotificationStaff) return;
-
         const member = message.mentions.users.first();
-        if (!member) {
-            return message.reply('❌ **Uso correcto:** `!resetcoin @usuario`');
-        }
+        if (!member) return message.reply('❌ **Uso correcto:** `!resetcoin @usuario`');
 
         try {
-            if (mongoose.connection.readyState !== 1) {
-                return message.reply('❌ **Error de conexión:** El bot no está conectado a MongoDB.');
-            }
-
             let user = await User.findOne({ userId: member.id });
-            if (!user) {
-                user = new User({ userId: member.id, coins: 0 });
-            }
-
+            if (!user) user = new User({ userId: member.id, coins: 0 });
             user.coins = 0;
             await user.save();
-
-            return message.reply(`🔄 **Bancarización:** Se han reseteado las monedas de ${member}.\n🪙 **Saldo Actual:** \`0.00 VG\``);
+            return message.reply(`🔄 **Bancarización:** Monedas reseteadas para ${member}.\n🪙 **Saldo Actual:** \`0.00 VG\``);
         } catch (error) {
-            console.error(error);
-            return message.reply(`❌ **Error de MongoDB:** \`${error.message}\``);
+            return message.reply(`❌ **Error:** \`${error.message}\``);
         }
     }
 
     // =================================
-    // COMANDO: !mycoins
+    // COMANDO GRAFICO: !mycoins 🎨
     // =================================
     if (message.content === '!mycoins') {
         try {
-            if (mongoose.connection.readyState !== 1) {
-                return message.reply('❌ **Error:** No hay conexión con la base de datos.');
-            }
+            if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error:** Sin conexión a la BD.');
 
             let user = await getUser(message.author.id);
-            if (!user) {
-                user = await createUser(message.author.id);
+            if (!user) user = await createUser(message.author.id);
+
+            // Crear lienzo (Ancho: 700px, Alto: 250px) - Estilo Banner Alargado
+            const canvas = createCanvas(700, 250);
+            const ctx = canvas.getContext('2d');
+
+            // 1. Fondo Oscuro Premium con Degradado
+            const grad = ctx.createLinearGradient(0, 0, 700, 250);
+            grad.addColorStop(0, '#111215');
+            grad.addColorStop(1, '#1a1b20');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 700, 250);
+
+            // Borde estético dorado fino a la izquierda
+            ctx.fillStyle = '#d4af37';
+            ctx.fillRect(0, 0, 8, 250);
+
+            // 2. Dibujar Círculo del Avatar del usuario
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+            ctx.closePath();
+            ctx.clip();
+            const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
+            const avatarImg = await loadImage(avatarUrl);
+            ctx.drawImage(avatarImg, 50, 65, 120, 120);
+            ctx.restore();
+
+            // Anillo dorado alrededor del avatar
+            ctx.strokeStyle = '#d4af37';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(110, 125, 60, 0, Math.PI * 2, true);
+            ctx.stroke();
+
+            // 3. Textos del Perfil
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.fillText(message.author.username.toUpperCase(), 200, 95);
+
+            ctx.fillStyle = '#a0a2a6';
+            ctx.font = '16px sans-serif';
+            ctx.fillText('SISTEMA DE BANCARIZACIÓN CENTRAL', 200, 60);
+
+            // Balance
+            ctx.fillStyle = '#e5c158';
+            ctx.font = 'bold 36px sans-serif';
+            ctx.fillText(`${user.coins.toFixed(2)} VG COINS`, 200, 150);
+
+            // 4. Barra de Progreso Decorativa Estilo Nivel (Ficticia hacia el próximo Rol importante)
+            ctx.fillStyle = '#2a2b31';
+            ctx.roundRect(200, 175, 400, 14, 7);
+            ctx.fill();
+
+            // Relleno de barra dinámico según monedas (máximo simulado de 30 para el premio mayor)
+            const porcentaje = Math.min(user.coins / 30, 1);
+            ctx.fillStyle = '#d4af37';
+            if (porcentaje > 0) {
+                ctx.roundRect(200, 175, 400 * porcentaje, 14, 7);
+                ctx.fill();
             }
 
-            const file = new AttachmentBuilder(COIN_LOGO);
-            const embed = new EmbedBuilder()
-                .setColor('#d4af37')
-                .setThumbnail('attachment://vaganciacoin.png')
-                .setAuthor({
-                    name: message.author.username,
-                    iconURL: message.author.displayAvatarURL({ dynamic: true, size: 256 })
-                })
-                .setDescription(`
-🪙 **TUS VG COINS**
+            ctx.fillStyle = '#72767d';
+            ctx.font = '12px sans-serif';
+            ctx.fillText(`Progreso Tienda Central: ${Math.floor(porcentaje * 100)}%`, 200, 205);
 
-# ${user.coins.toFixed(2)} 🪙
+            // 5. Estampar Logo Moneda si existe de fondo sutil a la derecha
+            try {
+                const coinImg = await loadImage(COIN_LOGO);
+                ctx.globalAlpha = 0.15; // Super transparente de fondo
+                ctx.drawImage(coinImg, 520, 45, 150, 150);
+                ctx.globalAlpha = 1.0;
+            } catch (e) {}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎮 Relájate, juega, gana.
-                `);
+            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'profile-vagancia.png' });
+            return message.reply({ files: [attachment] });
 
-            return message.reply({ embeds: [embed], files: [file] });
         } catch (error) {
             console.error(error);
+            return message.reply('❌ Error gráfico al generar la tarjeta de perfil.');
         }
     }
 
     // =================================
-    // COMANDO: !topcoins
+    // COMANDO GRAFICO: !topcoins 🏆
     // =================================
     if (message.content === '!topcoins') {
         try {
-            if (mongoose.connection.readyState !== 1) {
-                return message.reply('❌ **Error:** No hay conexión con la base de datos.');
-            }
+            if (mongoose.connection.readyState !== 1) return message.reply('❌ **Error:** Sin conexión.');
 
-            const data = await User.find().sort({ coins: -1 }).limit(10);
-            const file = new AttachmentBuilder(COIN_LOGO);
-            let ranking = '';
+            const data = await User.find().sort({ coins: -1 }).limit(5); // Top 5 para formato tarjeta limpia
+            if (data.length === 0) return message.reply('🪙 El ranking está vacío actualmente.');
 
+            const canvas = createCanvas(600, 450);
+            const ctx = canvas.getContext('2d');
+
+            // Fondo Tarjeta
+            ctx.fillStyle = '#111215';
+            ctx.fillRect(0, 0, 600, 450);
+
+            // Encabezado Dorado
+            ctx.fillStyle = '#d4af37';
+            ctx.fillRect(0, 0, 600, 70);
+
+            ctx.fillStyle = '#111215';
+            ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('🏆 RANKING GLOBAL • VG COINS', 30, 45);
+
+            // Renderizar cada puesto
+            let yOffset = 120;
             for (let i = 0; i < data.length; i++) {
-                const user = data[i];
-                let member;
+                const row = data[i];
+                let username = 'Usuario Desconocido';
                 try {
-                    member = await client.users.fetch(user.userId);
-                } catch {
-                    continue;
-                }
-                ranking += `**#${i + 1}** • ${member.username} \`🪙 ${user.coins.toFixed(2)} VG\`\n\n`;
+                    const fetchedUser = await client.users.fetch(row.userId);
+                    username = fetchedUser.username;
+                } catch {}
+
+                // Contenedor de fila individual estilo premium
+                ctx.fillStyle = '#1a1b20';
+                ctx.roundRect(25, yOffset - 30, 550, 55, 6);
+                ctx.fill();
+
+                // Color según el podio
+                if (i === 0) ctx.fillStyle = '#ffd700'; // Oro
+                else if (i === 1) ctx.fillStyle = '#c0c0c0'; // Plata
+                else if (i === 2) ctx.fillStyle = '#cd7f32'; // Bronce
+                else ctx.fillStyle = '#ffffff';
+
+                // Posición e información
+                ctx.font = 'bold 20px sans-serif';
+                ctx.fillText(`#${i + 1}`, 45, yOffset);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '18px sans-serif';
+                ctx.fillText(username.toUpperCase(), 100, yOffset);
+
+                ctx.fillStyle = '#e5c158';
+                ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(`${row.coins.toFixed(2)} VG`, 470, yOffset);
+
+                yOffset += 65;
             }
 
-            const embed = new EmbedBuilder()
-                .setColor('#d4af37')
-                .setThumbnail('attachment://vaganciacoin.png')
-                .setTitle('🏆 TOP RANKING • VG COINS')
-                .setDescription(`Lista global de los usuarios con más capital acumulado.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ranking}`)
-                .setFooter({ text: 'Vagancia Coin Leaderboard' });
+            const attachment = new AttachmentBuilder(await canvas.toBuffer(), { name: 'leaderboard-vagancia.png' });
+            return message.reply({ files: [attachment] });
 
-            return message.reply({ embeds: [embed], files: [file] });
         } catch (error) {
             console.error(error);
+            return message.reply('❌ Error gráfico al generar el Leaderboard.');
         }
     }
 
@@ -286,7 +325,7 @@ client.on('messageCreate', async (message) => {
 🏆 \`10 VG COINS\` ➔ **ROL MYTHICAL COLLECTOR**
 👑 \`15 VG COINS\` ➔ **ROL RICHEST ONE**
 💎 \`20 VG COINS\` ➔ **1 DECO DE 4.99 USD**
-💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO**
+💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO NARANJA X / MERCADO PAGO**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 👇 Presioná el botón correspondiente abajo para iniciar el reclamo.
@@ -321,43 +360,36 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
 
-    // LÓGICA PARA BOTÓN DE CERRAR TICKET
     if (interaction.customId === 'close_ticket') {
         const isStaff = interaction.member.roles.cache.has(STAFF_ROLE_ID);
         const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
         if (!isAdmin && !isStaff) {
-            return interaction.reply({ content: '❌ Solo el Staff de la organización puede cerrar este ticket.', ephemeral: true });
+            return interaction.reply({ content: '❌ Solo el Staff puede cerrar este ticket.', ephemeral: true });
         }
 
         await interaction.reply('🔒 **Cerrando el ticket...** Este canal se eliminará en 5 segundos.');
-        
-        setTimeout(() => {
-            interaction.channel.delete().catch(() => {});
-        }, 5000);
+        setTimeout(() => { interaction.channel.delete().catch(() => {}); }, 5000);
         return;
     }
 
-    // LÓGICA DE CANJES DE LA TIENDA
     const rewardKey = interaction.customId.replace('claim_', '');
     if (!rewards[rewardKey]) return;
 
     await interaction.deferReply({ ephemeral: true });
 
     if (mongoose.connection.readyState !== 1) {
-        return interaction.editReply({ content: '❌ El sistema de base de datos se encuentra offline en este momento.' });
+        return interaction.editReply({ content: '❌ El sistema de base de datos se encuentra offline.' });
     }
 
     let user = await getUser(interaction.user.id);
-    if (!user) {
-        user = await createUser(interaction.user.id);
-    }
+    if (!user) user = await createUser(interaction.user.id);
 
     const reward = rewards[rewardKey];
 
     if (user.coins < reward.coins) {
         return interaction.editReply({
-            content: `❌ **Fondos insuficientes:** Necesitás **${reward.coins} VG COINS** para este canje. Tu saldo es de \`${user.coins.toFixed(2)} VG\`.`
+            content: `❌ **Fondos insuficientes:** Necesitás **${reward.coins} VG COINS**. Saldo: \`${user.coins.toFixed(2)} VG\`.`
         });
     }
 
@@ -367,9 +399,7 @@ client.on('interactionCreate', async (interaction) => {
         try {
             const member = await interaction.guild.members.fetch(interaction.user.id);
             await member.roles.add(reward.role);
-        } catch (e) {
-            console.log("⚠️ No se pudo asignar el rol automáticamente.");
-        }
+        } catch (e) {}
     }
 
     try {
@@ -378,10 +408,7 @@ client.on('interactionCreate', async (interaction) => {
             type: ChannelType.GuildText,
             parent: TICKET_CATEGORY_ID,
             permissionOverwrites: [
-                {
-                    id: interaction.guild.id,
-                    deny: [PermissionsBitField.Flags.ViewChannel]
-                },
+                { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
                 {
                     id: interaction.user.id,
                     allow: [
@@ -423,12 +450,8 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             `)
             .setFooter({ text: 'Sistema de Reclamación Centralizado • La Vagancia' });
 
-        // Fila que contiene el botón de cierre exclusivo
         const closeRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('close_ticket')
-                .setLabel('🔒 Cerrar Ticket')
-                .setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('close_ticket').setLabel('🔒 Cerrar Ticket').setStyle(ButtonStyle.Danger)
         );
 
         const file = new AttachmentBuilder(COIN_LOGO);
@@ -440,24 +463,13 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             files: [file]
         });
 
-        const logChannel = interaction.guild.channels.cache.get(CLAIM_CHANNEL_ID);
-        if (logChannel) {
-            logChannel.send({
-                content: `📝 **Log de Auditoría de Canjes:**`,
-                embeds: [ticketEmbed],
-                files: [file]
-            }).catch(() => {});
-        }
-
         return interaction.editReply({
-            content: `✅ **Canje exitoso.** El premio se ha procesado.\n🎫 Tu ticket privado de entrega fue generado en: ${ticketChannel}`
+            content: `✅ **Canje exitoso.**\n🎫 Tu ticket privado fue generado en: ${ticketChannel}`
         });
 
     } catch (error) {
         console.error(error);
-        return interaction.editReply({
-            content: `❌ Ocurrió un error al intentar generar tu ticket en la categoría. Contacta a un administrador.`
-        });
+        return interaction.editReply({ content: `❌ Error al generar tu ticket.` });
     }
 });
 
