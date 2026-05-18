@@ -31,11 +31,11 @@ const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
 const MONGO_URI = process.env.MONGO_URI;
 
 // CANALES Y CATEGORÍAS
-const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; // Canal donde se duplica el log del ticket
-const TICKET_CATEGORY_ID = '1505883981005193588'; // Tu categoría de reclamos asignada
+const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; 
+const TICKET_CATEGORY_ID = '1505883981005193588'; 
 
 // STAFF Y PERMISOS
-const STAFF_ROLE_ID = '1476541425263968391'; // Rol autorizado para dar monedas y ver tickets
+const STAFF_ROLE_ID = '1476541425263968391'; 
 
 // LOGO MONEDA
 const COIN_LOGO = './vaganciacoin.png';
@@ -133,7 +133,7 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
     // =================================
-    // COMANDO: !wcoin (Admin o Rol Staff)
+    // COMANDO: !wcoin (Suma siempre 0.15)
     // =================================
     if (message.content.startsWith('!wcoin')) {
         const isNotificationStaff = message.member.roles.cache.has(STAFF_ROLE_ID);
@@ -141,20 +141,15 @@ client.on('messageCreate', async (message) => {
 
         if (!isAdmin && !isNotificationStaff) return;
 
-        const args = message.content.split(' ');
         const member = message.mentions.users.first();
-        const amount = parseFloat(args[2]);
 
         if (!member) {
-            return message.reply('❌ **Uso correcto:** `!wcoin @usuario [cantidad]` (Ej: `!wcoin @Alejo 0.15`)');
+            return message.reply('❌ **Uso correcto:** `!wcoin @usuario`');
         }
 
-        if (isNaN(amount) || amount <= 0) {
-            return message.reply('❌ **Error:** Por favor especifica una cantidad válida mayor a 0.');
-        }
-
-        const user = await addCoins(member.id, amount);
-        return message.reply(`✅ **Felicidades!** ${member} recibió **+${amount} VG COINS**\n🪙 **Saldo Actual:** \`${user.coins.toFixed(2)} VG\``);
+        // Suma fija de 0.15 VG COINS
+        const user = await addCoins(member.id, 0.15);
+        return message.reply(`✅ **Felicidades!** ${member} ganó **+0.15 VG COINS**\n🪙 **Total:** \`${user.coins.toFixed(2)} VG\``);
     }
 
     // =================================
@@ -166,7 +161,7 @@ client.on('messageCreate', async (message) => {
             user = await createUser(message.author.id);
         }
 
-        const attachment = new AttachmentBuilder(COIN_LOGO);
+        const file = new AttachmentBuilder(COIN_LOGO);
         const embed = new EmbedBuilder()
             .setColor('#d4af37')
             .setThumbnail('attachment://vaganciacoin.png')
@@ -185,7 +180,7 @@ client.on('messageCreate', async (message) => {
             `)
             .setFooter({ text: 'Vagancia Coin System • Control de Perfil' });
 
-        return message.reply({ embeds: [embed], files: [attachment] });
+        return message.reply({ embeds: [embed], files: [file] });
     }
 
     // =================================
@@ -193,7 +188,7 @@ client.on('messageCreate', async (message) => {
     // =================================
     if (message.content === '!topcoins') {
         const data = await User.find().sort({ coins: -1 }).limit(10);
-        const attachment = new AttachmentBuilder(COIN_LOGO);
+        const file = new AttachmentBuilder(COIN_LOGO);
         let ranking = '';
 
         for (let i = 0; i < data.length; i++) {
@@ -214,7 +209,7 @@ client.on('messageCreate', async (message) => {
             .setDescription(`Lista global de los usuarios con más capital acumulado.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ranking}`)
             .setFooter({ text: 'Vagancia Coin Leaderboard' });
 
-        return message.reply({ embeds: [embed], files: [attachment] });
+        return message.reply({ embeds: [embed], files: [file] });
     }
 
     // =================================
@@ -225,7 +220,7 @@ client.on('messageCreate', async (message) => {
         const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
         if (!isAdmin && !isNotificationStaff) return;
 
-        const attachment = new AttachmentBuilder(COIN_LOGO);
+        const file = new AttachmentBuilder(COIN_LOGO);
         const embed = new EmbedBuilder()
             .setColor('#00ff99')
             .setThumbnail('attachment://vaganciacoin.png')
@@ -240,7 +235,7 @@ client.on('messageCreate', async (message) => {
 🏆 \`10 VG COINS\` ➔ **ROL MYTHICAL COLLECTOR**
 👑 \`15 VG COINS\` ➔ **ROL RICHEST ONE**
 💎 \`20 VG COINS\` ➔ **1 DECO DE 4.99 USD**
-💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO NARANJA X / MERCADO PAGO**
+💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 👇 Presioná el botón correspondiente abajo para iniciar el reclamo.
@@ -258,13 +253,12 @@ client.on('messageCreate', async (message) => {
             new ButtonBuilder().setCustomId('claim_saldo').setLabel('💵 Canjear 10.000 ARS').setStyle(ButtonStyle.Primary)
         );
 
-        // Borra el comando original para mantener el chat limpio
         await message.delete().catch(() => {});
 
         return message.channel.send({
             embeds: [embed],
             components: [row, row2],
-            files: [attachment]
+            files: [file]
         });
     }
 });
@@ -279,7 +273,6 @@ client.on('interactionCreate', async (interaction) => {
     const rewardKey = interaction.customId.replace('claim_', '');
     if (!rewards[rewardKey]) return;
 
-    // Diferir la respuesta para que no tire timeout mientras procesa base de datos y crea canales
     await interaction.deferReply({ ephemeral: true });
 
     let user = await getUser(interaction.user.id);
@@ -295,22 +288,17 @@ client.on('interactionCreate', async (interaction) => {
         });
     }
 
-    // Descontar monedas
     await removeCoins(interaction.user.id, reward.coins);
 
-    // Otorgar Rol Automático si aplica
     if (reward.role) {
         try {
             const member = await interaction.guild.members.fetch(interaction.user.id);
             await member.roles.add(reward.role);
         } catch (e) {
-            console.log("⚠️ No se pudo asignar el rol automáticamente, se manejará en el ticket.");
+            console.log("⚠️ No se pudo asignar el rol automáticamente.");
         }
     }
 
-    // =================================
-    // CREACIÓN DEL TICKET DE RECLAMO
-    // =================================
     try {
         const ticketChannel = await interaction.guild.channels.create({
             name: `🎫-claim-${interaction.user.username}`,
@@ -342,7 +330,6 @@ client.on('interactionCreate', async (interaction) => {
             ]
         });
 
-        // Estructura adaptada premium (Basada en tus capturas de referencia)
         const ticketEmbed = new EmbedBuilder()
             .setColor('#bb0000')
             .setThumbnail('attachment://vaganciacoin.png')
@@ -363,26 +350,23 @@ Hola ${interaction.user}, tu solicitud de canje fue procesada con éxito y tus m
             `)
             .setFooter({ text: 'Sistema de Reclamación Centralizado • La Vagancia' });
 
-        const attachment = new AttachmentBuilder(COIN_LOGO);
+        const file = new AttachmentBuilder(COIN_LOGO);
 
-        // Mensaje dentro del Ticket mencionando al rol Staff
         await ticketChannel.send({
             content: `📢 <@&${STAFF_ROLE_ID}> • ¡Nuevo reclamo abierto por ${interaction.user}!`,
             embeds: [ticketEmbed],
-            files: [attachment]
+            files: [file]
         });
 
-        // Copia de Log al canal externo (opcional si configuras el CLAIM_CHANNEL_ID)
         const logChannel = interaction.guild.channels.cache.get(CLAIM_CHANNEL_ID);
         if (logChannel) {
             logChannel.send({
                 content: `📝 **Log de Auditoría de Canjes:**`,
                 embeds: [ticketEmbed],
-                files: [attachment]
+                files: [file]
             }).catch(() => {});
         }
 
-        // Responder confirmando al usuario de forma privada
         return interaction.editReply({
             content: `✅ **Canje exitoso.** El premio se ha procesado.\n🎫 Tu ticket privado de entrega fue generado en: ${ticketChannel}`
         });
