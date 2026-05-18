@@ -24,23 +24,23 @@ const client = new Client({
 });
 
 // =====================================
-// CONFIG
+// CONFIGURACIÓN GENERAL
 // =====================================
 
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
 const MONGO_URI = process.env.MONGO_URI;
 
 // CANALES Y CATEGORÍAS
-const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; 
-const TICKET_CATEGORY_ID = '1505883981005193588'; 
+const CLAIM_CHANNEL_ID = 'PONER_AQUÍ_ID_CANAL_LOGS_RECLAMOS'; // Canal de logs (opcional)
+const TICKET_CATEGORY_ID = '1505883981005193588'; // Tu categoría de reclamos fija
 
 // STAFF Y PERMISOS
-const STAFF_ROLE_ID = '1476541425263968391'; 
+const STAFF_ROLE_ID = '1476541425263968391'; // Rol Staff autorizado para dar monedas y ver tickets
 
 // LOGO MONEDA
 const COIN_LOGO = './vaganciacoin.png';
 
-// ROLES DE RECOMPENSA
+// ROLES DE RECOMPENSA (Reemplazar por IDs reales de tu servidor)
 const ROLES = {
     collector: 'ROLE_ID_COLLECTOR',
     elite: 'ROLE_ID_ELITE',
@@ -49,19 +49,19 @@ const ROLES = {
 };
 
 // =====================================
-// MONGODB
+// CONEXIÓN A MONGODB
 // =====================================
 
 mongoose.connect(MONGO_URI)
 .then(() => {
-    console.log('✅ MongoDB conectado');
+    console.log('✅ MongoDB conectado correctamente');
 })
 .catch((err) => {
     console.log('❌ Error en MongoDB:', err);
 });
 
 // =====================================
-// SCHEMA
+// BASE DE DATOS - SCHEMA
 // =====================================
 
 const userSchema = new mongoose.Schema({
@@ -75,7 +75,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('vgcoins', userSchema);
 
 // =====================================
-// PREMIOS
+// DICCIONARIO DE PREMIOS
 // =====================================
 
 const rewards = {
@@ -88,7 +88,7 @@ const rewards = {
 };
 
 // =====================================
-// READY
+// EVENTO: BOT ONLINE
 // =====================================
 
 client.once('ready', () => {
@@ -96,7 +96,7 @@ client.once('ready', () => {
 });
 
 // =====================================
-// FUNCIONES AUXILIARES
+// FUNCIONES INTERNAS (BASE DE DATOS)
 // =====================================
 
 async function getUser(userId) {
@@ -107,26 +107,16 @@ async function createUser(userId) {
     return await User.create({ userId, coins: 0 });
 }
 
-async function addCoins(userId, amount) {
-    let user = await getUser(userId);
-    if (!user) {
-        user = await createUser(userId);
-    }
-    user.coins += amount;
-    await user.save();
-    return user;
-}
-
 async function removeCoins(userId, amount) {
     const user = await getUser(userId);
     if (!user || user.coins < amount) return false;
-    user.coins -= amount;
+    user.coins = parseFloat((user.coins - amount).toFixed(2));
     await user.save();
     return true;
 }
 
 // =====================================
-// EVENTO: MENSAJES (COMANDOS)
+// EVENTO: MENSAJES (COMANDOS DE TEXTO)
 // =====================================
 
 client.on('messageCreate', async (message) => {
@@ -135,7 +125,7 @@ client.on('messageCreate', async (message) => {
     // =================================
     // COMANDO: !wcoin (Suma siempre 0.15)
     // =================================
-    if (message.content.startsWith('!wcoin')) {
+    if (message.content.trim().startsWith('!wcoin')) {
         const isNotificationStaff = message.member.roles.cache.has(STAFF_ROLE_ID);
         const isAdmin = message.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
@@ -144,72 +134,89 @@ client.on('messageCreate', async (message) => {
         const member = message.mentions.users.first();
 
         if (!member) {
-            return message.reply('❌ **Uso correcto:** `!wcoin @usuario`');
+            return message.reply('❌ **Uso correcto:** `!wcoin @usuario` (Asegurate de mencionar a alguien).');
         }
 
-        // Suma fija de 0.15 VG COINS
-        const user = await addCoins(member.id, 0.15);
-        return message.reply(`✅ **Felicidades!** ${member} ganó **+0.15 VG COINS**\n🪙 **Total:** \`${user.coins.toFixed(2)} VG\``);
+        try {
+            let user = await User.findOne({ userId: member.id });
+            if (!user) {
+                user = new User({ userId: member.id, coins: 0 });
+            }
+
+            // Suma de 0.15 controlando flotantes de JS
+            user.coins = parseFloat((user.coins + 0.15).toFixed(2));
+            await user.save();
+
+            return message.reply(`✅ **Felicidades!** ${member} ganó **+0.15 VG COINS**\n🪙 **Total:** \`${user.coins.toFixed(2)} VG\``);
+        } catch (error) {
+            console.error("❌ Error en !wcoin:", error);
+            return message.reply('❌ Ocurrió un error interno en la base de datos al procesar las monedas.');
+        }
     }
 
     // =================================
-    // COMANDO: !mycoins
+    // COMANDO: !mycoins (Diseño Fiel a la Captura)
     // =================================
     if (message.content === '!mycoins') {
-        let user = await getUser(message.author.id);
-        if (!user) {
-            user = await createUser(message.author.id);
-        }
+        try {
+            let user = await getUser(message.author.id);
+            if (!user) {
+                user = await createUser(message.author.id);
+            }
 
-        const file = new AttachmentBuilder(COIN_LOGO);
-        const embed = new EmbedBuilder()
-            .setColor('#d4af37')
-            .setThumbnail('attachment://vaganciacoin.png')
-            .setAuthor({
-                name: message.author.username,
-                iconURL: message.author.displayAvatarURL({ dynamic: true })
-            })
-            .setTitle('🏦 BANCARIZACIÓN VAGANCIA')
-            .setDescription(`
-🪙 **TUS COINS DISPONIBLES**
+            // El Thumbnail ahora toma dinámicamente el avatar del usuario que ejecuta el comando
+            const embed = new EmbedBuilder()
+                .setColor('#d4af37')
+                .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 512 }))
+                .setTitle('🏦 BANCARIZACIÓN VAGANCIA')
+                .setDescription(`
+👤 **CUENTA:** ${message.author}
 
-# ${user.coins.toFixed(2)} 🪙
+🪙 **TUS VG COINS:**
+➔ \`${user.coins.toFixed(2)} VG COINS\`
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎮 *Relájate, juega y canjeá tus victorias.*
-            `)
-            .setFooter({ text: 'Vagancia Coin System • Control de Perfil' });
+                `)
+                .setFooter({ text: 'Vagancia Coin System • Control de Perfil' });
 
-        return message.reply({ embeds: [embed], files: [file] });
+            return message.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error("❌ Error en !mycoins:", error);
+        }
     }
 
     // =================================
     // COMANDO: !topcoins
     // =================================
     if (message.content === '!topcoins') {
-        const data = await User.find().sort({ coins: -1 }).limit(10);
-        const file = new AttachmentBuilder(COIN_LOGO);
-        let ranking = '';
+        try {
+            const data = await User.find().sort({ coins: -1 }).limit(10);
+            const file = new AttachmentBuilder(COIN_LOGO);
+            let ranking = '';
 
-        for (let i = 0; i < data.length; i++) {
-            const user = data[i];
-            let member;
-            try {
-                member = await client.users.fetch(user.userId);
-            } catch {
-                continue;
+            for (let i = 0; i < data.length; i++) {
+                const user = data[i];
+                let member;
+                try {
+                    member = await client.users.fetch(user.userId);
+                } catch {
+                    continue;
+                }
+                ranking += `**#${i + 1}** • ${member.username} \`🪙 ${user.coins.toFixed(2)} VG\`\n\n`;
             }
-            ranking += `**#${i + 1}** • ${member.username} \`🪙 ${user.coins.toFixed(2)} VG\`\n\n`;
+
+            const embed = new EmbedBuilder()
+                .setColor('#d4af37')
+                .setThumbnail('attachment://vaganciacoin.png')
+                .setTitle('🏆 TOP RANKING • VG COINS')
+                .setDescription(`Lista global de los usuarios con más capital acumulado.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ranking}`)
+                .setFooter({ text: 'Vagancia Coin Leaderboard' });
+
+            return message.reply({ embeds: [embed], files: [file] });
+        } catch (error) {
+            console.error("❌ Error en !topcoins:", error);
         }
-
-        const embed = new EmbedBuilder()
-            .setColor('#d4af37')
-            .setThumbnail('attachment://vaganciacoin.png')
-            .setTitle('🏆 TOP RANKING • VG COINS')
-            .setDescription(`Lista global de los usuarios con más capital acumulado.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ranking}`)
-            .setFooter({ text: 'Vagancia Coin Leaderboard' });
-
-        return message.reply({ embeds: [embed], files: [file] });
     }
 
     // =================================
@@ -235,7 +242,7 @@ client.on('messageCreate', async (message) => {
 🏆 \`10 VG COINS\` ➔ **ROL MYTHICAL COLLECTOR**
 👑 \`15 VG COINS\` ➔ **ROL RICHEST ONE**
 💎 \`20 VG COINS\` ➔ **1 DECO DE 4.99 USD**
-💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO**
+💵 \`30 VG COINS\` ➔ **10.000 ARS DE SALDO NARANJA X / MERCADO PAGO**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 👇 Presioná el botón correspondiente abajo para iniciar el reclamo.
@@ -264,7 +271,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // =====================================
-// EVENTO: INTERACCIONES (BOTONES)
+// EVENTO: INTERACCIONES (BOTONES DE TIENDA)
 // =====================================
 
 client.on('interactionCreate', async (interaction) => {
@@ -288,17 +295,20 @@ client.on('interactionCreate', async (interaction) => {
         });
     }
 
+    // Procesar el descuento
     await removeCoins(interaction.user.id, reward.coins);
 
-    if (reward.role) {
+    // Auto-rol si está configurado el ID real
+    if (reward.role && reward.role !== 'ROLE_ID_COLLECTOR' && reward.role !== 'ROLE_ID_ELITE' && reward.role !== 'ROLE_ID_MYTHICAL' && reward.role !== 'ROLE_ID_RICHEST') {
         try {
             const member = await interaction.guild.members.fetch(interaction.user.id);
             await member.roles.add(reward.role);
         } catch (e) {
-            console.log("⚠️ No se pudo asignar el rol automáticamente.");
+            console.log("⚠️ No se pudo asignar el rol automáticamente, se resolverá en el ticket.");
         }
     }
 
+    // Creación de ticket formateado estilo premium
     try {
         const ticketChannel = await interaction.guild.channels.create({
             name: `🎫-claim-${interaction.user.username}`,
