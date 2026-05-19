@@ -26,17 +26,22 @@ const client = new Client({
 });
 
 // =====================================
-// REGISTRO DE FUENTE VÍA NPM (INFAILIBLE)
+// ENLAZAR CON TU ARCHIVO ARIALBD.TTF
 // =====================================
-const FUENTE_NOMBRE = 'Arial';
+const FUENTE_NOMBRE = 'VaganciaFont';
 try {
-    // Requerimos la fuente descargada por npm
-    const arialFont = require('@canvas-fonts/arial');
-    GlobalFonts.registerFromPath(arialFont, FUENTE_NOMBRE);
-    console.log(`✅ Fuente nativa instalada y registrada como: ${FUENTE_NOMBRE}`);
+    // Apuntamos directamente al archivo real que tenés en tu carpeta
+    const fontPath = path.join(__dirname, 'arialbd.ttf');
+    GlobalFonts.registerFromPath(fontPath, FUENTE_NOMBRE);
+    console.log(`\n==================================================`);
+    console.log(`✅ FUENTE DETECTADA Y REGISTRADA: ${FUENTE_NOMBRE}`);
+    console.log(`==================================================\n`);
 } catch (err) {
-    console.log('⚠️ Error cargando la fuente de npm:', err.message);
+    console.log('❌ Error crítico leyendo arialbd.ttf:', err.message);
 }
+
+// Configuración de tamaño base para los renders
+const ESTILO_LETRA = `bold 28px "${FUENTE_NOMBRE}"`;
 
 // =====================================
 // CONFIGURACIÓN GENERAL
@@ -130,7 +135,7 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
 }
 
 // =====================================
-// EVENTO MENSAJES (COMANDOS)
+// MENSAJES Y COMANDOS
 // =====================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
@@ -138,9 +143,7 @@ client.on('messageCreate', async (message) => {
     const isStaff = message.member?.roles.cache.has(STAFF_ROLE_ID);
     const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
-    // -------------------------------------
-    // COMANDO: !WCOIN
-    // -------------------------------------
+    // !WCOIN
     if (message.content.startsWith('!wcoin')) {
         if (!isAdmin && !isStaff) return;
         const member = message.mentions.users.first();
@@ -159,9 +162,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // -------------------------------------
-    // COMANDO: !RESETCOIN
-    // -------------------------------------
+    // !RESETCOIN
     if (message.content.startsWith('!resetcoin')) {
         if (!isAdmin && !isStaff) return;
         const member = message.mentions.users.first();
@@ -178,9 +179,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // -------------------------------------
-    // COMANDO: !MYCOINS
-    // -------------------------------------
+    // !MYCOINS
     if (message.content === '!mycoins') {
         try {
             let user = await getUser(message.author.id);
@@ -192,19 +191,15 @@ client.on('messageCreate', async (message) => {
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
 
-            // Fondo base principal
             ctx.fillStyle = '#0f1014';
             ctx.fillRect(0, 0, 800, 260);
 
-            // Tarjeta interior
             ctx.fillStyle = '#17181d';
             drawRoundRect(ctx, 20, 20, 760, 220, 20, true, false);
 
-            // Detalle lateral izquierdo amarillo
             ctx.fillStyle = '#ffcc00';
             drawRoundRect(ctx, 20, 20, 10, 220, 20, true, false);
 
-            // Renderizado del Avatar
             let avatarLoaded = false;
             try {
                 const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
@@ -232,20 +227,19 @@ client.on('messageCreate', async (message) => {
             ctx.arc(130, 130, 65, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Dibujado estricto de Textos usando la fuente segura Arial
+            // Dibujado de textos con la tipografía enlazada arialbd
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold 32px ${FUENTE_NOMBRE}`;
+            ctx.font = ESTILO_LETRA.replace('28px', '34px');
             ctx.fillText(message.author.username.toUpperCase(), 230, 75);
 
             ctx.fillStyle = '#9ca0aa';
-            ctx.font = `20px ${FUENTE_NOMBRE}`;
+            ctx.font = ESTILO_LETRA.replace('28px', '20px');
             ctx.fillText('SALDO ACTUAL DE VG COINS', 230, 125);
 
             ctx.fillStyle = '#ffcc00';
-            ctx.font = `bold 48px ${FUENTE_NOMBRE}`;
+            ctx.font = ESTILO_LETRA.replace('28px', '48px');
             ctx.fillText(`${user.coins.toFixed(2)} VG`, 230, 180);
 
-            // Moneda decorativa derecha
             try {
                 const coin = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
@@ -255,7 +249,7 @@ client.on('messageCreate', async (message) => {
             } catch (e) {}
 
             ctx.fillStyle = '#6b7280';
-            ctx.font = `italic 14px ${FUENTE_NOMBRE}`;
+            ctx.font = ESTILO_LETRA.replace('28px', '14px');
             ctx.fillText('La Vagancia • Sistema Oficial', 230, 225);
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer('image/png'), { name: 'mycoins.png' });
@@ -263,13 +257,11 @@ client.on('messageCreate', async (message) => {
 
         } catch (err) {
             console.error(err);
-            return message.reply('❌ Error al procesar el módulo de imagen.');
+            return message.reply('❌ Error al generar la tarjeta.');
         }
     }
 
-    // -------------------------------------
-    // COMANDO: !TOPCOINS
-    // -------------------------------------
+    // !TOPCOINS
     if (message.content === '!topcoins') {
         try {
             const data = await User.find().sort({ coins: -1 }).limit(5);
@@ -283,17 +275,15 @@ client.on('messageCreate', async (message) => {
 
             ctx.textBaseline = 'middle';
 
-            // Fondo base principal
             ctx.fillStyle = '#0f1014';
             ctx.fillRect(0, 0, 800, 520);
 
-            // Header Amarillo para el Título
             ctx.fillStyle = '#ffcc00';
             drawRoundRect(ctx, 20, 20, 760, 70, 18, true, false);
 
-            // TÍTULO CORREGIDO REQUERIDO
+            // TÍTULO ASIGNADO EN CABECERA AMARILLA
             ctx.fillStyle = '#0f1014';
-            ctx.font = `bold 36px ${FUENTE_NOMBRE}`;
+            ctx.font = ESTILO_LETRA.replace('28px', '36px');
             ctx.textAlign = 'left';
             ctx.fillText('BANKER VAGANCIA', 45, 55);
 
@@ -313,17 +303,14 @@ client.on('messageCreate', async (message) => {
                     }
                 } catch (e) {}
 
-                // Caja gris de la fila
                 ctx.fillStyle = '#17181d';
                 drawRoundRect(ctx, 20, y, 760, 65, 15, true, false);
 
-                // Nivel de posición (#1, #2, etc)
                 ctx.fillStyle = '#ffcc00';
-                ctx.font = `bold 26px ${FUENTE_NOMBRE}`;
+                ctx.font = ESTILO_LETRA.replace('28px', '26px');
                 ctx.textAlign = 'left';
                 ctx.fillText(`#${i + 1}`, 45, y + 32);
 
-                // Avatar circular del ranking
                 if (avatar) {
                     ctx.save();
                     ctx.beginPath();
@@ -339,21 +326,19 @@ client.on('messageCreate', async (message) => {
                     ctx.fill();
                 }
 
-                // Nombre completo expuesto en el ranking
                 ctx.fillStyle = '#ffffff';
-                ctx.font = `bold 22px ${FUENTE_NOMBRE}`;
+                ctx.font = ESTILO_LETRA.replace('28px', '22px');
                 ctx.fillText(username, 200, y + 32);
 
-                // MARCADOR DE COINS ALINEADO PERFECTAMENTE A LA DERECHA
+                // COINS RENDERIZADOS CORRECTAMENTE A LA DERECHA
                 ctx.fillStyle = '#ffcc00';
-                ctx.font = `bold 24px ${FUENTE_NOMBRE}`;
+                ctx.font = ESTILO_LETRA.replace('28px', '24px');
                 ctx.textAlign = 'right';
                 ctx.fillText(`${row.coins.toFixed(2)} VG`, 740, y + 32);
 
                 y += 76;
             }
 
-            // Moneda decorativa
             try {
                 const coin = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
@@ -367,13 +352,11 @@ client.on('messageCreate', async (message) => {
 
         } catch (err) {
             console.error(err);
-            return message.reply('❌ Error general al procesar el renderizado.');
+            return message.reply('❌ Error general al procesar el top.');
         }
     }
 
-    // -------------------------------------
-    // COMANDO: !PANELCOIN
-    // -------------------------------------
+    // !PANELCOIN
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isStaff) return;
 
@@ -412,7 +395,7 @@ Presioná un botón para reclamar.
 });
 
 // =====================================
-// INTERACCIONES DE BOTONES (TICKETS)
+// BOTONES Y TICKETS
 // =====================================
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
