@@ -26,14 +26,12 @@ const client = new Client({
 });
 
 // =====================================
-// FORZAR REGISTRO DE FUENTES (SISTEMA O LINUX)
+// REGISTRO SEGURO DE FUENTES PARA LINUX
 // =====================================
-// Esto evita que las letras salgan invisibles en VPS/Linux
 if (process.platform === 'linux') {
     GlobalFonts.registerFromPath('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 'Arial');
 }
 
-// TIPOGRAFÍA SEGURA PARA EL CANVAS
 const CANVAS_FONT = 'sans-serif'; 
 
 // =====================================
@@ -111,7 +109,6 @@ async function removeCoins(userId, amount) {
     return true;
 }
 
-// RECTÁNGULOS REDONDOS
 function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
@@ -129,7 +126,7 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
 }
 
 // =====================================
-// EVENTO MENSAJES
+// MENSAJES / COMANDOS
 // =====================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
@@ -179,9 +176,16 @@ client.on('messageCreate', async (message) => {
             let user = await getUser(message.author.id);
             if (!user) user = await createUser(message.author.id);
 
+            const coinsString = `${user.coins.toFixed(2)} VG`;
+            const usernameString = message.author.username.toUpperCase();
+
             const canvas = createCanvas(800, 260);
             const ctx = canvas.getContext('2d');
 
+            // RESET DE ALINEACIÓN (CRÍTICO)
+            ctx.textAlign = 'left';
+
+            // Fondos base
             ctx.fillStyle = '#0f1014';
             ctx.fillRect(0, 0, 800, 260);
 
@@ -191,50 +195,56 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#ffcc00';
             drawRoundRect(ctx, 20, 20, 10, 220, 20, true, false);
 
-            // Intentar cargar Avatar
+            // Renderizado del Avatar
+            let avatarLoaded = false;
             try {
-                const avatar = await loadImage(message.author.displayAvatarURL({ extension: 'png', size: 256 }));
+                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 256 });
+                const avatar = await loadImage(avatarUrl);
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(130, 130, 65, 0, Math.PI * 2);
+                ctx.arc(120, 130, 65, 0, Math.PI * 2);
                 ctx.closePath();
                 ctx.clip();
-                ctx.drawImage(avatar, 65, 65, 130, 130);
+                ctx.drawImage(avatar, 55, 65, 130, 130);
                 ctx.restore();
-            } catch {
+                avatarLoaded = true;
+            } catch (e) {}
+
+            if (!avatarLoaded) {
                 ctx.fillStyle = '#2b2d36';
                 ctx.beginPath();
-                ctx.arc(130, 130, 65, 0, Math.PI * 2);
+                ctx.arc(120, 130, 65, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Borde del Avatar
+            // Anillo dorado del avatar
             ctx.strokeStyle = '#ffcc00';
             ctx.lineWidth = 5;
             ctx.beginPath();
-            ctx.arc(130, 130, 65, 0, Math.PI * 2);
+            ctx.arc(120, 130, 65, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Textos Informativos
+            // Dibujado de Textos
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold 32px ${CANVAS_FONT}`;
-            ctx.fillText(message.author.username.toUpperCase(), 230, 95);
+            ctx.font = `bold 34px ${CANVAS_FONT}`;
+            ctx.fillText(usernameString, 230, 100);
 
             ctx.fillStyle = '#9ca0aa';
             ctx.font = `20px ${CANVAS_FONT}`;
-            ctx.fillText('SALDO ACTUAL DE VG COINS', 230, 135);
+            ctx.fillText('SALDO ACTUAL DE VG COINS', 230, 140);
 
             ctx.fillStyle = '#ffcc00';
-            ctx.font = `bold 48px ${CANVAS_FONT}`;
-            ctx.fillText(`${user.coins.toFixed(2)} VG`, 230, 190);
+            ctx.font = `bold 52px ${CANVAS_FONT}`;
+            ctx.fillText(coinsString, 230, 195);
 
+            // Logo decorativo lateral
             try {
                 const coin = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
                 ctx.globalAlpha = 0.9;
                 ctx.drawImage(coin, 590, 45, 150, 150);
                 ctx.restore();
-            } catch {}
+            } catch (e) {}
 
             ctx.fillStyle = '#6b7280';
             ctx.font = `italic 16px ${CANVAS_FONT}`;
@@ -244,8 +254,8 @@ client.on('messageCreate', async (message) => {
             return message.reply({ files: [attachment] });
 
         } catch (err) {
-            console.log(err);
-            return message.reply('❌ Error al generar la tarjeta.');
+            console.error(err);
+            return message.reply('❌ Error crítico al procesar la imagen de tus monedas.');
         }
     }
 
@@ -264,11 +274,11 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#0f1014';
             ctx.fillRect(0, 0, 800, 520);
 
-            // Cabecera Amarilla
+            // Caja Amarilla del Título Superior
             ctx.fillStyle = '#ffcc00';
             drawRoundRect(ctx, 20, 20, 760, 70, 18, true, false);
 
-            // Título Principal
+            // Texto del Título Superior
             ctx.fillStyle = '#0f1014';
             ctx.font = `bold 36px ${CANVAS_FONT}`;
             ctx.textAlign = 'left';
@@ -278,25 +288,29 @@ client.on('messageCreate', async (message) => {
 
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
-                let username = 'DESCONOCIDO';
+                let username = `ID: ${row.userId.substring(0, 6)}...`;
                 let avatar = null;
 
                 try {
                     const fetched = await client.users.fetch(row.userId);
-                    username = fetched.username;
-                    avatar = await loadImage(fetched.displayAvatarURL({ extension: 'png', size: 128 }));
-                } catch {}
+                    if (fetched) {
+                        username = fetched.username.toUpperCase();
+                        const avatarUrl = fetched.displayAvatarURL({ extension: 'png', size: 128 });
+                        avatar = await loadImage(avatarUrl);
+                    }
+                } catch (e) {}
 
-                // Contenedor de Fila
+                // Fondo Gris Oscuro de Fila
                 ctx.fillStyle = '#17181d';
                 drawRoundRect(ctx, 20, y, 760, 65, 15, true, false);
 
-                // Posición #
+                // Número de Posición (#1, #2...)
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = `bold 28px ${CANVAS_FONT}`;
+                ctx.textAlign = 'left'; // Asegurar izquierda para el top
                 ctx.fillText(`#${i + 1}`, 45, y + 42);
 
-                // Avatar Circular
+                // Dibujado del círculo del avatar
                 if (avatar) {
                     ctx.save();
                     ctx.beginPath();
@@ -312,36 +326,35 @@ client.on('messageCreate', async (message) => {
                     ctx.fill();
                 }
 
-                // Nombre
+                // Nombre del Usuario
                 ctx.fillStyle = '#ffffff';
                 ctx.font = `bold 24px ${CANVAS_FONT}`;
-                ctx.fillText(username.toUpperCase(), 200, y + 41);
+                ctx.fillText(username, 200, y + 41);
 
-                // Monedas (Alineado a la derecha)
+                // Saldo de Monedas Alineado a la Derecha
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = `bold 26px ${CANVAS_FONT}`;
                 ctx.textAlign = 'right';
                 ctx.fillText(`${row.coins.toFixed(2)} VG`, 740, y + 41);
-                ctx.textAlign = 'left'; // Resetear alineación
 
                 y += 76;
             }
 
-            // Decoración final
+            // Moneda decorativa de fondo inferior
             try {
                 const coin = await loadImage(COIN_LOGO_PATH);
                 ctx.save();
                 ctx.globalAlpha = 0.8;
                 ctx.drawImage(coin, 650, 410, 110, 110);
                 ctx.restore();
-            } catch {}
+            } catch (e) {}
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer('image/png'), { name: 'topcoins.png' });
             return message.reply({ files: [attachment] });
 
         } catch (err) {
-            console.log(err);
-            return message.reply('❌ Error al generar el top.');
+            console.error(err);
+            return message.reply('❌ Error al procesar el render del ranking.');
         }
     }
 
@@ -384,7 +397,7 @@ Presioná un botón para reclamar.
 });
 
 // =====================================
-// BOTONES (INTERACTION)
+// INTERACCIONES (BOTONES DE RECLAMO)
 // =====================================
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
