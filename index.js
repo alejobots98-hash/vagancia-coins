@@ -26,21 +26,17 @@ const client = new Client({
 });
 
 // =====================================
-// ENLAZAR CON TU ARCHIVO ARIALBD.TTF
+// FUENTE LOCAL DETECTADA
 // =====================================
 const FUENTE_NOMBRE = 'VaganciaFont';
 try {
-    // Apuntamos directamente al archivo real que tenés en tu carpeta
     const fontPath = path.join(__dirname, 'arialbd.ttf');
     GlobalFonts.registerFromPath(fontPath, FUENTE_NOMBRE);
-    console.log(`\n==================================================`);
-    console.log(`✅ FUENTE DETECTADA Y REGISTRADA: ${FUENTE_NOMBRE}`);
-    console.log(`==================================================\n`);
+    console.log(`✅ Fuente acoplada para la tienda: ${FUENTE_NOMBRE}`);
 } catch (err) {
-    console.log('❌ Error crítico leyendo arialbd.ttf:', err.message);
+    console.log('❌ Alerta con arialbd.ttf:', err.message);
 }
 
-// Configuración de tamaño base para los renders
 const ESTILO_LETRA = `bold 28px "${FUENTE_NOMBRE}"`;
 
 // =====================================
@@ -135,7 +131,7 @@ function drawRoundRect(ctx, x, y, width, height, radius, fill, stroke) {
 }
 
 // =====================================
-// MENSAJES Y COMANDOS
+// EVENTO MENSAJES Y TIENDA GRAFICA
 // =====================================
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
@@ -143,43 +139,34 @@ client.on('messageCreate', async (message) => {
     const isStaff = message.member?.roles.cache.has(STAFF_ROLE_ID);
     const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
-    // !WCOIN
+    // Comandos Administrativos Básicos (!wcoin y !resetcoin)
     if (message.content.startsWith('!wcoin')) {
         if (!isAdmin && !isStaff) return;
         const member = message.mentions.users.first();
         if (!member) return message.reply('❌ Uso correcto: `!wcoin @usuario`');
-
         try {
             let user = await getUser(member.id);
             if (!user) user = await createUser(member.id);
-
             user.coins = parseFloat((user.coins + 0.15).toFixed(2));
             await user.save();
-
             return message.reply(`${VG_EMOJI} ${member} ganó \`+0.15 VG COINS\`\n${VG_EMOJI} Total actual: \`${user.coins.toFixed(2)} VG\``);
-        } catch (err) {
-            return message.reply(`❌ Error: ${err.message}`);
-        }
+        } catch (err) { return message.reply(`❌ Error: ${err.message}`); }
     }
 
-    // !RESETCOIN
     if (message.content.startsWith('!resetcoin')) {
         if (!isAdmin && !isStaff) return;
         const member = message.mentions.users.first();
         if (!member) return message.reply('❌ Uso correcto: `!resetcoin @usuario`');
-
         try {
             let user = await getUser(member.id);
             if (!user) user = await createUser(member.id);
             user.coins = 0;
             await user.save();
             return message.reply(`${VG_EMOJI} Monedas reseteadas correctamente`);
-        } catch (err) {
-            return message.reply(`❌ Error: ${err.message}`);
-        }
+        } catch (err) { return message.reply(`❌ Error: ${err.message}`); }
     }
 
-    // !MYCOINS
+    // Tarjeta individual !mycoins
     if (message.content === '!mycoins') {
         try {
             let user = await getUser(message.author.id);
@@ -187,7 +174,6 @@ client.on('messageCreate', async (message) => {
 
             const canvas = createCanvas(800, 260);
             const ctx = canvas.getContext('2d');
-
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
 
@@ -227,7 +213,6 @@ client.on('messageCreate', async (message) => {
             ctx.arc(130, 130, 65, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Dibujado de textos con la tipografía enlazada arialbd
             ctx.fillStyle = '#ffffff';
             ctx.font = ESTILO_LETRA.replace('28px', '34px');
             ctx.fillText(message.author.username.toUpperCase(), 230, 75);
@@ -254,25 +239,17 @@ client.on('messageCreate', async (message) => {
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer('image/png'), { name: 'mycoins.png' });
             return message.reply({ files: [attachment] });
-
-        } catch (err) {
-            console.error(err);
-            return message.reply('❌ Error al generar la tarjeta.');
-        }
+        } catch (err) { console.error(err); return message.reply('❌ Error al generar la tarjeta.'); }
     }
 
-    // !TOPCOINS
+    // Ranking !topcoins
     if (message.content === '!topcoins') {
         try {
             const data = await User.find().sort({ coins: -1 }).limit(5);
-
-            if (!data.length) {
-                return message.reply('❌ No hay usuarios en el ranking.');
-            }
+            if (!data.length) return message.reply('❌ No hay usuarios en el ranking.');
 
             const canvas = createCanvas(800, 520);
             const ctx = canvas.getContext('2d');
-
             ctx.textBaseline = 'middle';
 
             ctx.fillStyle = '#0f1014';
@@ -281,14 +258,12 @@ client.on('messageCreate', async (message) => {
             ctx.fillStyle = '#ffcc00';
             drawRoundRect(ctx, 20, 20, 760, 70, 18, true, false);
 
-            // TÍTULO ASIGNADO EN CABECERA AMARILLA
             ctx.fillStyle = '#0f1014';
             ctx.font = ESTILO_LETRA.replace('28px', '36px');
             ctx.textAlign = 'left';
             ctx.fillText('BANKER VAGANCIA', 45, 55);
 
             let y = 115;
-
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
                 let username = `ID: ${row.userId.substring(0, 6)}`;
@@ -298,8 +273,7 @@ client.on('messageCreate', async (message) => {
                     const fetched = await client.users.fetch(row.userId);
                     if (fetched) {
                         username = fetched.username.toUpperCase();
-                        const avatarUrl = fetched.displayAvatarURL({ extension: 'png', size: 128 });
-                        avatar = await loadImage(avatarUrl);
+                        avatar = await loadImage(fetched.displayAvatarURL({ extension: 'png', size: 128 }));
                     }
                 } catch (e) {}
 
@@ -330,7 +304,6 @@ client.on('messageCreate', async (message) => {
                 ctx.font = ESTILO_LETRA.replace('28px', '22px');
                 ctx.fillText(username, 200, y + 32);
 
-                // COINS RENDERIZADOS CORRECTAMENTE A LA DERECHA
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = ESTILO_LETRA.replace('28px', '24px');
                 ctx.textAlign = 'right';
@@ -349,53 +322,120 @@ client.on('messageCreate', async (message) => {
 
             const attachment = new AttachmentBuilder(await canvas.toBuffer('image/png'), { name: 'topcoins.png' });
             return message.reply({ files: [attachment] });
-
-        } catch (err) {
-            console.error(err);
-            return message.reply('❌ Error general al procesar el top.');
-        }
+        } catch (err) { console.error(err); return message.reply('❌ Error general al procesar el top.'); }
     }
 
-    // !PANELCOIN
+    // =====================================
+    // NUEVO COMANDO: !PANELCOIN GRÁFICO PREMIUM
+    // =====================================
     if (message.content === '!panelcoin') {
         if (!isAdmin && !isStaff) return;
 
-        const file = new AttachmentBuilder(COIN_LOGO_PATH, { name: 'vaganciacoin.png' });
-        const embed = new EmbedBuilder()
-            .setColor('#ffcc00')
-            .setThumbnail('attachment://vaganciacoin.png')
-            .setTitle('LA VAGANCIA • COIN STORE')
-            .setDescription(`
-${VG_EMOJI} \`03 VG COINS\` ➜ **ROL COLLECTOR**
-${VG_EMOJI} \`05 VG COINS\` ➜ **ROL ELITE**
-${VG_EMOJI} \`10 VG COINS\` ➜ **ROL MYTHICAL**
-${VG_EMOJI} \`15 VG COINS\` ➜ **ROL RICHEST**
-${VG_EMOJI} \`20 VG COINS\` ➜ **1 DECO 4.99 USD**
-${VG_EMOJI} \`30 VG COINS\` ➜ **10.000 ARS**
+        try {
+            // Creamos una tarjeta dedicada de Tienda de dimensiones controladas
+            const canvas = createCanvas(800, 580);
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'middle';
 
-━━━━━━━━━━━━━━━━━━
-Presioná un botón para reclamar.
-`);
+            // Lienzo base premium de La Vagancia
+            ctx.fillStyle = '#0f1014';
+            ctx.fillRect(0, 0, 800, 580);
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('claim_collector').setLabel('Collector').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('claim_elite').setLabel('Elite').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('claim_mythical').setLabel('Mythical').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('claim_richest').setLabel('Richest').setStyle(ButtonStyle.Danger)
-        );
+            // Cabecera Amarilla Principal
+            ctx.fillStyle = '#ffcc00';
+            drawRoundRect(ctx, 20, 20, 760, 70, 18, true, false);
 
-        const row2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('claim_deco').setLabel('Deco').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('claim_saldo').setLabel('10.000 ARS').setStyle(ButtonStyle.Primary)
-        );
+            ctx.fillStyle = '#0f1014';
+            ctx.font = ESTILO_LETRA.replace('28px', '36px');
+            ctx.textAlign = 'left';
+            ctx.fillText('LA VAGANCIA • COIN STORE', 45, 55);
 
-        await message.delete().catch(() => {});
-        return message.channel.send({ embeds: [embed], components: [row, row2], files: [file] });
+            // Array de ítems mapeados para iterar en el lienzo de forma milimétrica
+            const storeItems = [
+                { price: '03 VG', item: 'ROL COLLECTOR' },
+                { price: '05 VG', item: 'ROL ELITE COLLECTOR' },
+                { price: '10 VG', item: 'ROL MYTHICAL COLLECTOR' },
+                { price: '15 VG', item: 'ROL RICHEST ONE' },
+                { price: '20 VG', item: '1 DECO DE 4.99 USD' },
+                { price: '30 VG', item: '10.000 ARS DE SALDO' }
+            ];
+
+            let startY = 115;
+            for (let i = 0; i < storeItems.length; i++) {
+                const itemData = storeItems[i];
+
+                // Contenedor prolijo para cada fila de la tienda
+                ctx.fillStyle = '#17181d';
+                drawRoundRect(ctx, 20, startY, 760, 60, 12, true, false);
+
+                // Dibujar un pequeño indicador dorado lateral por fila
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillRect(20, startY + 15, 6, 30);
+
+                // Etiqueta de Precio en Dorado a la izquierda
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = ESTILO_LETRA.replace('28px', '24px');
+                ctx.textAlign = 'left';
+                ctx.fillText(itemData.price, 45, startY + 30);
+
+                // Símbolo de flecha estético divisor
+                ctx.fillStyle = '#6b7280';
+                ctx.font = ESTILO_LETRA.replace('28px', '20px');
+                ctx.fillText('➔', 145, startY + 30);
+
+                // Nombre del Premio o Rol en Blanco Puro
+                ctx.fillStyle = '#ffffff';
+                ctx.font = ESTILO_LETRA.replace('28px', '22px');
+                ctx.fillText(itemData.item, 195, startY + 30);
+
+                startY += 72;
+            }
+
+            // Estampado del logo de la moneda en la esquina inferior para darle el toque final
+            try {
+                const coin = await loadImage(COIN_LOGO_PATH);
+                ctx.save();
+                ctx.globalAlpha = 0.15; // Un alpha sutil de fondo para no tapar los botones interactivos inferiores
+                ctx.drawImage(coin, 650, 440, 120, 120);
+                ctx.restore();
+            } catch (e) {}
+
+            const storeBanner = new AttachmentBuilder(await canvas.toBuffer('image/png'), { name: 'coinstore.png' });
+
+            // Mensaje Embed complementario que acompaña al banner gráfico estructurado
+            const embed = new EmbedBuilder()
+                .setColor('#ffcc00')
+                .setDescription('**Seleccioná un botón acá abajo para abrir tu ticket de reclamo instantáneo:**');
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('claim_collector').setLabel('Collector').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('claim_elite').setLabel('Elite').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('claim_mythical').setLabel('Mythical').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('claim_richest').setLabel('Richest').setStyle(ButtonStyle.Danger)
+            );
+
+            const row2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('claim_deco').setLabel('Deco').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('claim_saldo').setLabel('10.000 ARS').setStyle(ButtonStyle.Primary)
+            );
+
+            await message.delete().catch(() => {});
+
+            return message.channel.send({
+                files: [storeBanner],
+                embeds: [embed],
+                components: [row, row2]
+            });
+
+        } catch (err) {
+            console.error(err);
+            return message.reply('❌ Error al procesar el banner gráfico de la tienda.');
+        }
     }
 });
 
 // =====================================
-// BOTONES Y TICKETS
+// INTERACCIONES DE BOTONES (TICKETS)
 // =====================================
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton()) return;
